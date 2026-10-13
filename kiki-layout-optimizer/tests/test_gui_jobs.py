@@ -32,8 +32,8 @@ def test_autocalculation_writes_all_artifacts(tmp_path):
     for file in ['result_test.json','preview_test.svg','route_test.svg','route_test.csv']:
         assert (folder/file).stat().st_size>10
     assert not (folder/'result_test.tmp').exists()
-    assert json.loads((folder/'result_test.json').read_text())['document_name']=='Test.ai'
-    assert '<svg' in (folder/'preview_test.svg').read_text()
+    assert json.loads((folder/'result_test.json').read_text(encoding='utf-8'))['document_name']=='Test.ai'
+    assert '<svg' in (folder/'preview_test.svg').read_text(encoding='utf-8')
 
 
 def test_real_progress_reports_phases(tmp_path):

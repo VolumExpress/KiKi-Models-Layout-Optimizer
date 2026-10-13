@@ -37,7 +37,7 @@ def test_shared_cut_preview_deduplicates_coincident_boundary(tmp_path):
     assert abs(report['unique_vector_length_mm']-70)<1e-6
     assert report['status']=='DRAFT_NOT_CAM'
     path=tmp_path/'preview.svg';write_preview(report,path,width=30,height=15)
-    assert 'NOT FOR CAM' in path.read_text()
+    assert 'NOT FOR CAM' in path.read_text(encoding='utf-8')
 
 
 def test_shared_cut_preview_refuses_overlap():

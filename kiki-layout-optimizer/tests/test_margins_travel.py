@@ -82,7 +82,7 @@ def test_cli_generates_machine_independent_reports(tmp_path):
         '-o',str(out),'--gap','0.7','--margin','2','--margin-left','7',
         '--margin-top','4','--margin-right','5','--margin-bottom','3',
         '--flow','rows','--travel-order','nearest','--travel-svg',str(svg),
-        '--travel-csv',str(csv),'--no-refine'],capture_output=True,text=True)
+        '--travel-csv',str(csv),'--no-refine'],capture_output=True,text=True,encoding='utf-8')
     assert result.returncode==0, result.stderr
     output=json.loads(out.read_text(encoding='utf-8'))
     assert output['settings']['margins_mm']['left']==7

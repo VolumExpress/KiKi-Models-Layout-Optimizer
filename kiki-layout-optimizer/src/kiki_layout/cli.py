@@ -40,6 +40,12 @@ def svg_preview(geometry, result, lang="ru"):
 
 
 def main(argv=None):
+    # Windows pipes and redirected output may default to cp1252.
+    # Emit UTF-8 consistently, including localized Russian status messages.
+    if sys.platform == 'win32':
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, 'reconfigure'):
+                stream.reconfigure(encoding='utf-8', errors='replace')
     # Determine help language even when --lang is located AFTER --help or input.
     cli = list(argv) if argv is not None else sys.argv[1:]
     lang = "ru"
