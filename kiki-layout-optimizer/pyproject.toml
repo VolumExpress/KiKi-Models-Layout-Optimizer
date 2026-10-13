@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kiki-layout-optimizer"
+version = "0.7.2"
+description = "Contour-aware layout optimization for engraving and cutting layouts in Adobe Illustrator"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["shapely>=2.0,<3"]
+license = {text = "MIT"}
+authors = [{name = "KiKi Models"}]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+kiki-layout = "kiki_layout.cli:main"
+kiki-layout-gui = "kiki_layout.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

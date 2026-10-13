@@ -1,0 +1,132 @@
+﻿/* KiKi Models language preferences (ExtendScript / Illustrator Windows and macOS).
+   Uses only standard ScriptUI/ExtendScript File and Folder APIs. Locale keys are
+   never added to the geometry JSON, so changing language cannot affect the layout. */
+var kikiLangCache = null;
+var KIKI_STRINGS = {
+  ru: {
+    export_ok: 'KiKi: экспортировано объектов: {objects}.\nКонтуров с приближённым расчётом обводки: {strokes}. Незамкнутых путей с заливкой: {open}.\nПропущено пустых групп: {groups}; невидимых контуров: {unpainted}.\nПропущено объектов верхнего уровня: {skipped}. Исходные индексы сохранены.\nПеред применением проверьте SVG, особенно обводки и составные контуры!',
+    file_saved: 'Файл сохранён: {path}',
+    cannot_clear_result: 'Не удалось удалить устаревший result_test.json.',
+    missing_result: 'Результат ещё не рассчитан: {path}. Сначала выполните расчёт в окне KiKi.',
+    export_error: 'KiKi: ОШИБКА ЭКСПОРТА: {message} (строка {line})',
+    apply_error: 'KiKi: ОШИБКА ПРИМЕНЕНИЯ: {message} (строка {line})',
+    apply_confirm: 'KiKi изменит положение и/или угол поворота выделенных объектов.\n\nПродолжить?',
+    apply_ok: 'KiKi: размещено объектов: {count}. Проверьте интервалы и сохраните документ как новую версию.',
+    save_export: 'Сохранить геометрию KiKi в JSON',
+    load_layout: 'Выберите JSON с результатом KiKi Layout Optimizer',
+    no_doc: 'Откройте документ Illustrator.',
+    no_selection: 'Выделите один или несколько векторных объектов или групп.',
+    bad_path: 'Контур содержит менее двух опорных точек.',
+    invalid_stroke: 'Некорректная толщина обводки. Проверьте панель «Обводка»: {item}',
+    clipping_path: 'Обтравочный контур требует ручной проверки: {item}',
+    clipping_compound: 'Обтравочный контур внутри составного пути: {item}',
+    filled_path: 'Для залитого контура нужны минимум три точки: {item}',
+    filled_part: 'Для залитой части составного контура нужны минимум три точки.',
+    hidden_locked: 'Скрытый или заблокированный объект: {item}',
+    clipping_group: 'Группа с обтравочной маской пока не поддерживается: {item}',
+    child_error: 'В группе {item}, дочерний объект {index} {child}: {message}',
+    unsupported: 'Неподдерживаемый объект {type}: {name}. Текст и эффекты преобразуйте в контуры только в копии.',
+    not_editable: 'Объект недоступен для изменения: {item}',
+    selection_error: 'Выделенный объект {index} {item}: {message}',
+    no_geometry: 'В выделении не найдено видимых векторных контуров.',
+    cannot_write: 'Невозможно открыть JSON для записи.',
+    invalid_layout: 'Формат выходного JSON не поддерживается.',
+    name_mismatch: 'Имя документа не совпадает с исходным. Откройте ту же копию файла .ai.',
+    selection_mismatch: 'Число выделенных объектов изменилось (ожидалось: {count}).',
+    board_mismatch: 'Размер активной монтажной области отличается от оптимизированной пластины.',
+    bad_index: 'Некорректный индекс выделения: {id}',
+    rotation: 'Неподдерживаемый угол поворота: {angle}',
+    apply_editable: 'Нельзя изменить объект {id}.',
+    bounds_changed: 'Габариты объекта {id} изменились после экспорта. Повторите экспорт.',
+    order_changed: 'Изменилось имя или положение в списке объекта {id}.',
+    bad_coordinates: 'Некорректные координаты.',
+    cannot_read: 'Невозможно прочитать JSON с раскладкой.',
+    choose_title: 'KiKi Models — язык / Language',
+    choose_prompt: 'Выберите язык интерфейса / Select interface language:',
+    choose_accept: 'Сохранить / Save',
+    choose_cancel: 'Отмена / Cancel',
+    lang_saved: 'Язык KiKi Models: Русский. Настройка сохранена.',
+    lang_file_error: 'Не удалось сохранить настройку языка в папку пользователя.'
+  },
+  en: {
+    export_ok: 'KiKi export: {objects} objects with geometry.\nStroke paths approximated: {strokes}. Open filled paths: {open}.\nSkipped empty groups: {groups}, invisible paths: {unpainted}.\nTop-level skipped selections: {skipped}. Selection indices preserved.\nInspect stroke and compound-path SVG preview before applying!',
+    file_saved: 'File saved: {path}',
+    cannot_clear_result: 'Could not remove obsolete result_test.json.',
+    missing_result: 'No calculated layout yet: {path}. Run KiKi optimization first.',
+    export_error: 'KiKi export ERROR: {message} (line {line})',
+    apply_error: 'KiKi apply ERROR: {message} (line {line})',
+    apply_confirm: 'KiKi layout will MOVE / ROTATE selected objects in this AI document.\n\nContinue?',
+    apply_ok: 'KiKi layout applied to {count} items. Inspect all gaps and save as a new version.',
+    save_export: 'Save exported KiKi geometry JSON',
+    load_layout: 'Select kiki-layout result JSON',
+    no_doc: 'Open an Illustrator document.',
+    no_selection: 'Select one or more vector objects or groups.',
+    bad_path: 'Path with fewer than two anchor points.',
+    invalid_stroke: 'Visible stroke has invalid width. Check Stroke panel: {item}',
+    clipping_path: 'Clipping path requires manual review: {item}',
+    clipping_compound: 'Clipping path inside compound: {item}',
+    filled_path: 'Filled path needs at least three points: {item}',
+    filled_part: 'Filled compound part needs at least three points.',
+    hidden_locked: 'Hidden or locked item: {item}',
+    clipping_group: 'Clipping group is not yet supported: {item}',
+    child_error: 'Inside group {item}, child {index} {child}: {message}',
+    unsupported: 'Unsupported {type}: {name}; outline text/effects on a copy only.',
+    not_editable: 'Item not editable: {item}',
+    selection_error: 'Selected item {index} {item}: {message}',
+    no_geometry: 'No visible vector geometry found in selection.',
+    cannot_write: 'Cannot open output JSON for writing',
+    invalid_layout: 'Unsupported output schema',
+    name_mismatch: 'Document name differs from export. Use the original source copy/name.',
+    selection_mismatch: 'Selection size differs from exported source ({count} expected).',
+    board_mismatch: 'Active artboard does not match optimized plate',
+    bad_index: 'Invalid selection index {id}',
+    rotation: 'Unsupported rotation {angle}',
+    apply_editable: 'Object not editable {id}',
+    bounds_changed: 'Source object {id} bounds changed since export. Re-export.',
+    order_changed: 'Source object name/order changed since export: {id}',
+    bad_coordinates: 'Invalid coordinates',
+    cannot_read: 'Cannot read layout JSON.',
+    choose_title: 'KiKi Models — language / Язык',
+    choose_prompt: 'Select interface language / Выберите язык:',
+    choose_accept: 'Save / Сохранить',
+    choose_cancel: 'Cancel / Отмена',
+    lang_saved: 'KiKi Models language: English. Preference saved.',
+    lang_file_error: 'Could not save the language preference to user settings.'
+  }
+};
+function kikiLanguageFile() {
+  if (typeof Folder === 'undefined' || typeof File === 'undefined') return null;
+  var home = new Folder(Folder.userData.fsName + '/KiKiModels');
+  return {home:home, file:new File(home.fsName + '/language.txt')};
+}
+function kikiGetLanguage() {
+  if (kikiLangCache === 'ru' || kikiLangCache === 'en') return kikiLangCache;
+  try {
+    var cfg=kikiLanguageFile();
+    if (cfg !== null && cfg.file.exists) {
+      cfg.file.encoding='UTF-8';
+      if (!cfg.file.open('r')) return 'ru';
+      var val=String(cfg.file.read()).replace(/\s+/g,'').toLowerCase();
+      cfg.file.close();
+      if (val==='ru' || val==='en') { kikiLangCache=val; return val; }
+    }
+  } catch(ex) {}
+  return 'ru';
+}
+function kikiSetLanguage(lang) {
+  if (lang!=='ru' && lang!=='en') throw Error('Language must be ru or en');
+  var cfg=kikiLanguageFile();
+  if (cfg===null) throw Error('File/Folder API is unavailable');
+  if (!cfg.home.exists && !cfg.home.create()) throw Error('Cannot create settings directory');
+  cfg.file.encoding='UTF-8';
+  if (!cfg.file.open('w')) throw Error('Cannot write language preference');
+  cfg.file.write(lang); cfg.file.close(); kikiLangCache=lang;
+}
+function kikiT(key,params) {
+  var lang=kikiGetLanguage();
+  var table=KIKI_STRINGS[lang] || KIKI_STRINGS.ru;
+  var msg=table[key] || KIKI_STRINGS.en[key] || key;
+  return msg.replace(/\{([a-z_]+)\}/g,function(all,name){
+    return params && params[name] !== undefined ? String(params[name]) : all;
+  });
+}

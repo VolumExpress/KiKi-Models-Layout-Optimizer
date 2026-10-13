@@ -1,0 +1,78 @@
+/* v0.5.1: assign object rules to items selected in Illustrator, not opaque
+   export indices. Uses read-only Illustrator PageItem.uuid (CC 2020+).
+   All matches must succeed before constraints.json is touched. */
+function kikiCepSetSelectedRules(projectRoot, lockPosition, rotationText) {
+  function encode(text){
+    var s=String(text);
+    return '"'+s.replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\r/g,'\\r').replace(/\n/g,'\\n')+'"';
+  }
+  function done(status,detail){return '{"status":'+encode(status)+',"detail":'+encode(detail)+'}';}
+  try {
+    if (app.documents.length===0)throw Error('Open a document in Illustrator / Откройте документ');
+    var doc=app.activeDocument, selected=doc.selection;
+    if(!selected || selected.length===0)throw Error('Select emblems in Illustrator / Выделите эмблемы');
+    var angles=null;
+    if(rotationText!=='global') {
+      if(!/^(0|0,180|0,90,180,270)$/.test(rotationText))throw Error('Invalid rotation setting');
+      angles=rotationText.split(',');
+      for(var ai=0;ai<angles.length;ai++)angles[ai]=Number(angles[ai]);
+    }
+    var root=new Folder(projectRoot);
+    if(!root.exists)throw Error('Project folder not found');
+    var work=new Folder(root.fsName+'/workspace');
+    var docKey=String(doc.name).replace(/[\\\/:*?"<>|]/g,'_').replace(/\.ai$/i,'').replace(/\s+/g,'_');
+    if(docKey.length>72)docKey=docKey.substring(0,72);
+    if(!docKey)docKey='Illustrator';
+    var dir=new Folder(work.fsName+'/'+docKey);
+    var inp=new File(dir.fsName+'/input_copy.json');
+    if(!inp.exists)throw Error('Export the document first / Сначала выполните экспорт');
+    var helpers=new File(root.fsName+'/illustrator/json_helpers.jsxinc');
+    if(!helpers.exists)throw Error('JSON helper missing');
+    $.evalFile(helpers);
+    function readJSON(path){path.encoding='UTF-8';if(!path.open('r'))throw Error('Cannot read '+path.fsName);var text=path.read();path.close();return kikiParseJSON(text);}
+    var input=readJSON(inp);
+    if(input.document_name!==doc.name)throw Error('Document differs from export. Export again / Документ не совпадает с экспортом');
+    var byUuid={};
+    for(var i=0;i<input.objects.length;i++) {
+      var entry=input.objects[i];
+      if(!entry.uuid)throw Error('Re-export with KiKi v0.5.1 to enable selection by click / Сделайте новый экспорт v0.5.1');
+      if(byUuid[entry.uuid])throw Error('Duplicate exported UUID');
+      byUuid[entry.uuid]=entry;
+    }
+    var mapped=[], seen={};
+    for(var j=0;j<selected.length;j++) {
+      var art=selected[j],uuid='';
+      try{uuid=String(art.uuid||'');}catch(ignore){}
+      var obj=byUuid[uuid];
+      if(!uuid || !obj)throw Error('Selected object is not an exported top-level emblem. Select its group using Group Selection Tool; then retry / Выберите исходную группу эмблемы');
+      if(seen[uuid])continue;
+      seen[uuid]=true;
+      var expected=obj.source_bounds_pt, actual=art.geometricBounds;
+      if(!expected || !actual || expected.length!==4)throw Error('Missing original bounds');
+      for(var k=0;k<4;k++)if(Math.abs(Number(expected[k])-Number(actual[k]))>0.05)
+        throw Error('Emblem changed after export: '+obj.id+'. Export again / Выполните новый экспорт');
+      mapped.push(obj);
+    }
+    if(mapped.length>12 && !confirm('Apply the rule to '+mapped.length+' selected emblems? / Применить правило к '+mapped.length+' эмблемам?'))
+      return done('cancelled','Cancelled / Отменено');
+    var path=new File(dir.fsName+'/constraints.json'),payload;
+    if(path.exists){payload=readJSON(path);if(payload.schema!==1||payload.document_name!==doc.name)throw Error('Stored rules belong to a different document');}
+    else payload={schema:1,document_name:doc.name,items:{}};
+    if(!payload.items)payload.items={};
+    for(var m=0;m<mapped.length;m++){
+      var entry=mapped[m],id=String(entry.id);
+      if(!lockPosition && angles===null)delete payload.items[id];
+      else payload.items[id]={source_name:entry.name,source_bounds_pt:entry.source_bounds_pt,
+          lock_position:!!lockPosition,rotations:angles};
+    }
+    var tmp=new File(dir.fsName+'/constraints.tmp');tmp.encoding='UTF-8';
+    if(!tmp.open('w'))throw Error('Cannot save constraints');
+    tmp.write(kikiStringify(payload));tmp.close();
+    if(path.exists && !path.remove())throw Error('Cannot replace old constraints');
+    if(!tmp.rename('constraints.json'))throw Error('Cannot finalize constraints');
+    // Prevent stale layouts from being applied after a rule has changed.
+    var stale=new File(dir.fsName+'/result_test.json');if(stale.exists && !stale.remove())
+       throw Error('Constraints saved, but old result cannot be cleared. Delete result_test.json manually.');
+    return done('ok','Rules saved for '+mapped.length+' emblems / Ограничения сохранены для '+mapped.length+' эмблем. Пересчитайте раскладку.');
+  }catch(e){return done('error',String(e.message||e));}
+}
