@@ -14,14 +14,28 @@ def load(name):
 
 
 def test_windows_payload_integrity(tmp_path):
+    # Populate a mocked legal payload for isolated packaging tests.
+    legal=tmp_path/'mock-licenses'
+    legal.mkdir(parents=True, exist_ok=True)
+    for fn in ('PYTHON_LICENSE.txt','GEOS_LGPL-2.1.txt','SHAPELY-license.txt','NUMPY-license.txt'):
+        (legal/fn).write_text('SYNTHETIC TEST PLACEHOLDER\n',encoding='utf-8')
+    (legal/'VERSIONS.json').write_text(json.dumps({
+        'python':'3.12-test','shapely':'2-test','numpy':'2-test','geos':'3-test',
+        'licenses':{'python':['PYTHON_LICENSE.txt'], 'shapely':['SHAPELY-license.txt'],
+                    'numpy':['NUMPY-license.txt'], 'geos':['GEOS_LGPL-2.1.txt']}
+    }),encoding='utf-8')
     worker=tmp_path/'worker.exe'
     worker.write_bytes(b'MZ-SYNTHETIC-TEST-ONLY')
     output=tmp_path/'package'
-    load('build_portable').build(worker,output,'windows')
+    load('build_portable').build(worker,output,'windows',licenses_dir=legal)
     count,errors=load('verify_payload').verify(output)
     assert count>20 and not errors
     assert (output/'SHA256SUMS.txt').read_text().count('\n')==count
     (output/'runtime/kiki-worker.exe').write_bytes(b'MZCORRUPT')
+    _,errors=load('verify_payload').verify(output)
+    assert any('Checksum mismatch' in e for e in errors)
+    (output/'runtime/kiki-worker.exe').write_bytes(b'MZ-SYNTHETIC-TEST-ONLY')
+    (output/'third_party_licenses/GEOS_LGPL-2.1.txt').write_text('CORRUPTED',encoding='utf-8')
     _,errors=load('verify_payload').verify(output)
     assert any('Checksum mismatch' in e for e in errors)
 

@@ -44,3 +44,7 @@ Portable packages include `SHA256SUMS.txt` and `SHA256SUMS.json`. Installer scri
 Windows: run `installers\windows\uninstall.cmd` (or `uninstall.ps1`); macOS: `installers/macos/uninstall.command`. User `workspace` and `presets` are kept by default. Adobe developer-mode preferences are left unchanged since other extensions may depend on them.
 
 Windows/macOS builds still need packaged-worker smoke testing and native Illustrator roundtrip testing. Unsigned release candidates are not certified production builds.
+
+### Third-party license texts
+
+After installation, `THIRD_PARTY_NOTICES.md` and `third_party_licenses/` are available in the KiKi installation folder. The build fails when required license texts are missing. Review the GEOS LGPL requirements before distributing binaries.

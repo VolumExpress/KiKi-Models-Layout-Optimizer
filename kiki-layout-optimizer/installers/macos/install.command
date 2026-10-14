@@ -11,10 +11,10 @@ fi
 if [[ ! -f "$SRC/SHA256SUMS.txt" ]]; then echo 'No SHA256SUMS.txt' >&2; exit 1; fi
 ( cd "$SRC" && shasum -a 256 -c SHA256SUMS.txt ) || { echo 'Integrity check failed' >&2; exit 1; }
 mkdir -p "$DEST" "$CEP"
-for item in runtime cep illustrator assets installers docs; do
+for item in runtime cep illustrator assets installers docs third_party_licenses; do
   [[ ! -e "$SRC/$item" ]] || ditto "$SRC/$item" "$DEST/$item"
 done
-for file in LICENSE VERSION README.md README_RU.md README_EN.md CHANGELOG.md SHA256SUMS.json SHA256SUMS.txt; do
+for file in LICENSE VERSION README.md README_RU.md README_EN.md CHANGELOG.md THIRD_PARTY_NOTICES.md SHA256SUMS.json SHA256SUMS.txt; do
   [[ ! -e "$SRC/$file" ]] || cp "$SRC/$file" "$DEST/$file"
 done
 ditto "$DEST/cep/com.kikimodels.layoutoptimizer" "$CEP"

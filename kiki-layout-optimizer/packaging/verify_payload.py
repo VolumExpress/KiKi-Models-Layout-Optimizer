@@ -28,6 +28,24 @@ def verify(root: Path) -> tuple[int, list[str]]:
                 h.update(block)
         if h.hexdigest() != expected.lower():
             errors.append(f"Checksum mismatch: {name}")
+    # Distribution must contain versioned legal notices and their exact files.
+    notices = root / 'THIRD_PARTY_NOTICES.md'
+    version_file = root / 'third_party_licenses' / 'VERSIONS.json'
+    if not notices.is_file() or not version_file.is_file():
+        errors.append('Missing third-party notices or component inventory')
+    else:
+        try:
+            versions = json.loads(version_file.read_text(encoding='utf-8'))
+            for component in ('python', 'shapely', 'numpy', 'geos'):
+                if not versions.get(component):
+                    errors.append(f'Missing component version: {component}')
+                for license_file in versions.get('licenses', {}).get(component, []):
+                    if not (root / 'third_party_licenses' / license_file).is_file():
+                        errors.append(f'Missing third-party license: {license_file}')
+                if not versions.get('licenses', {}).get(component):
+                    errors.append(f'Missing third-party license list: {component}')
+        except (OSError, ValueError, TypeError) as exc:
+            errors.append(f'Invalid license inventory: {exc}')
     # Detect unexpected payload files. Installers also verify only manifest entries;
     # CI check disallows unaccounted-for files in a release package.
     allowed = set(manifest) | {"SHA256SUMS.json", "SHA256SUMS.txt"}

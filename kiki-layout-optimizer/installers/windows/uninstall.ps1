@@ -16,11 +16,11 @@ if (Test-Path -LiteralPath $cfg) {
         } else { Write-Warning 'CEP extension points elsewhere and was left untouched.' }
     } else { Write-Warning 'CEP configuration was not recognized; extension left untouched.' }
 }
-foreach ($name in @('runtime','cep','illustrator','assets','installers','docs')) {
+foreach ($name in @('runtime','cep','illustrator','assets','installers','docs','third_party_licenses')) {
     $target=Join-Path $dest $name
     if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
 }
-foreach ($name in @('LICENSE','VERSION','README.md','README_RU.md','README_EN.md','CHANGELOG.md','SHA256SUMS.json','SHA256SUMS.txt')) {
+foreach ($name in @('LICENSE','VERSION','README.md','README_RU.md','README_EN.md','CHANGELOG.md','THIRD_PARTY_NOTICES.md','SHA256SUMS.json','SHA256SUMS.txt')) {
     $file=Join-Path $dest $name
     if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
 }

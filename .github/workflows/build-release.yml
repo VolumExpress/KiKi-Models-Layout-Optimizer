@@ -34,6 +34,8 @@ jobs:
         run: for f in tests/*.cjs; do node "$f" || exit 1; done
       - name: Unit tests
         run: python -m pytest -q
+      - name: Collect exact runtime license texts
+        run: python packaging/collect_licenses.py
       - name: Build bundled Python worker on native OS
         run: pyinstaller --noconfirm --clean --onefile --name kiki-worker --paths src packaging/worker_entry.py
       - name: Sanity test executable

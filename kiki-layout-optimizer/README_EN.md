@@ -88,3 +88,7 @@ Per-document `workspace/<name>/input_copy.json`, `result_test.json`, `preview_te
 
 ### RC2: release checks
 [RC2 release checklist](docs/en/RELEASE_RC2.md) — native Windows/macOS tests, no-Python installation checks and license audit before public release.
+
+## Third-party licenses
+
+KiKi project code is MIT licensed. Windows/macOS packaged distributions include `THIRD_PARTY_NOTICES.md` and `third_party_licenses/` with full license texts and exact build versions for Python, Shapely, NumPy and GEOS. Before public binary distribution, separately assess GEOS LGPL-2.1 corresponding-source and replacement/relinking requirements; the CI license manifest is not proof of legal compliance.

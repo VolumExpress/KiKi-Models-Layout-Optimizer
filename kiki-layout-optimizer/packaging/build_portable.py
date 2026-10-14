@@ -12,11 +12,11 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 PUBLIC_DIRS=('cep','illustrator','assets','installers')
-PUBLIC_FILES=('LICENSE','README.md','README_RU.md','README_EN.md','CHANGELOG.md')
+PUBLIC_FILES=('LICENSE','README.md','README_RU.md','README_EN.md','CHANGELOG.md','THIRD_PARTY_NOTICES.md')
 DOCS=('docs',)
 
 
-def build(worker:Path, output:Path, os_name:str):
+def build(worker:Path, output:Path, os_name:str, *, licenses_dir:Path | None = None):
     worker=worker.resolve();output=output.resolve()
     if not worker.is_file(): raise FileNotFoundError(worker)
     # Do not accidentally distribute a Linux binary labelled as Windows/macOS.
@@ -31,8 +31,18 @@ def build(worker:Path, output:Path, os_name:str):
         raise ValueError('Refusing to delete a source directory; output must be inside dist/ or outside the repo')
     if output in worker.parents:
         raise ValueError('Worker must not be located inside output, which is overwritten')
+    legal_dir = (licenses_dir or ROOT / 'dist' / 'third_party_licenses').resolve()
+    required = ('VERSIONS.json', 'PYTHON_LICENSE.txt', 'GEOS_LGPL-2.1.txt')
+    if not legal_dir.is_dir() or any(not (legal_dir / file).is_file() for file in required):
+        raise RuntimeError('Missing third-party licenses: run python packaging/collect_licenses.py before packaging')
+    import json as _json
+    versions = _json.loads((legal_dir / 'VERSIONS.json').read_text(encoding='utf-8'))
+    for files in versions.get('licenses', {}).values():
+        if not files or any(not (legal_dir / f).is_file() for f in files):
+            raise RuntimeError('Incomplete third-party license inventory')
     if output.exists():shutil.rmtree(output)
     output.mkdir(parents=True)
+    shutil.copytree(legal_dir, output / 'third_party_licenses')
     for d in PUBLIC_DIRS:
         shutil.copytree(ROOT/d,output/d,ignore=shutil.ignore_patterns('__pycache__','*.pyc','.DS_Store'))
     for d in DOCS:

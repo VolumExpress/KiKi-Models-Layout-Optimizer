@@ -10,10 +10,10 @@ if [[ -f "$CONFIG" ]] && grep -Fq "$DEST" "$CONFIG"; then
 elif [[ -f "$CONFIG" ]]; then
   echo 'CEP points elsewhere; leaving it untouched'
 fi
-for name in runtime cep illustrator assets installers docs; do
+for name in runtime cep illustrator assets installers docs third_party_licenses; do
   [[ ! -e "$DEST/$name" ]] || rm -rf "$DEST/$name"
 done
-for file in LICENSE VERSION README.md README_RU.md README_EN.md CHANGELOG.md SHA256SUMS.json SHA256SUMS.txt; do
+for file in LICENSE VERSION README.md README_RU.md README_EN.md CHANGELOG.md THIRD_PARTY_NOTICES.md SHA256SUMS.json SHA256SUMS.txt; do
   [[ ! -e "$DEST/$file" ]] || rm "$DEST/$file"
 done
 if [[ "${1:-}" == '--delete-user-data' ]]; then

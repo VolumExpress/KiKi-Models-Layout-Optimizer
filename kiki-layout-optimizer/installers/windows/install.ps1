@@ -29,7 +29,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot 'runtime\kiki-worker.exe
 Write-Host "Package integrity: verified $checked files"
 if (-not $SkipCopy) {
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    foreach ($item in @('runtime','cep','illustrator','assets','installers','docs')) {
+    foreach ($item in @('runtime','cep','illustrator','assets','installers','docs','third_party_licenses')) {
         $from=Join-Path $sourceRoot $item
         if (Test-Path $from) {
             $to=Join-Path $dest $item
@@ -37,7 +37,7 @@ if (-not $SkipCopy) {
             Copy-Item -Path (Join-Path $from '*') -Destination $to -Recurse -Force
         }
     }
-    foreach ($name in @('LICENSE','VERSION','README.md','README_RU.md','README_EN.md','CHANGELOG.md','SHA256SUMS.json','SHA256SUMS.txt')) {
+    foreach ($name in @('LICENSE','VERSION','README.md','README_RU.md','README_EN.md','CHANGELOG.md','THIRD_PARTY_NOTICES.md','SHA256SUMS.json','SHA256SUMS.txt')) {
         $file=Join-Path $sourceRoot $name
         if (Test-Path -LiteralPath $file) { Copy-Item -LiteralPath $file -Destination $dest -Force }
     }
