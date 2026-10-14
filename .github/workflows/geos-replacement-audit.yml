@@ -1,0 +1,91 @@
+name: GEOS LGPL technical replacement audit
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/geos-replacement-audit.yml'
+      - 'kiki-layout-optimizer/packaging/geos_replacement_audit.py'
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: kiki-layout-optimizer
+
+jobs:
+  replace-geos:
+    name: Rebuild and replace GEOS (${{ matrix.platform }})
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install KiKi build requirements
+        run: python -m pip install -e '.[test]' pyinstaller
+      - name: Create native onedir worker and legal inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python packaging/collect_licenses.py
+          pyinstaller --noconfirm --clean --onedir --contents-directory _internal --name kiki-worker --paths src packaging/worker_entry.py
+          if [[ "${{ matrix.platform }}" == windows ]]; then
+            python packaging/build_portable.py --worker dist/kiki-worker/kiki-worker.exe --os windows --output dist/portable
+          else
+            python packaging/build_portable.py --worker dist/kiki-worker/kiki-worker --os macos --output dist/portable
+          fi
+          python packaging/verify_payload.py dist/portable
+          python packaging/smoke_runtime.py dist/portable
+      - name: Download and verify official GEOS 3.14.1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/geos-audit/source
+          curl -fL --retry 3 --silent --show-error \
+            'https://github.com/libgeos/geos/releases/download/3.14.1/geos-3.14.1.tar.bz2' \
+            -o dist/geos-audit/geos-3.14.1.tar.bz2
+          python -c "import hashlib,pathlib; p=pathlib.Path('dist/geos-audit/geos-3.14.1.tar.bz2'); h=hashlib.file_digest(p.open('rb'), 'sha256').hexdigest(); assert h == '3c20919cda9a505db07b5216baa980bacdaa0702da715b43f176fb07eff7e716',h; print('Official GEOS tarball SHA-256 verified:',h)"
+          tar -xjf dist/geos-audit/geos-3.14.1.tar.bz2 -C dist/geos-audit/source
+      - name: Compile independently built GEOS shared libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE="$(pwd)/dist/geos-audit/source/geos-3.14.1"
+          BUILD="$(pwd)/dist/geos-audit/build"
+          PREFIX="$(pwd)/dist/geos-audit/installed"
+          if [[ "${{ matrix.platform }}" == windows ]]; then
+            cmake -S "$SOURCE" -B "$BUILD" -G 'Visual Studio 17 2022' -A x64 \
+              -DBUILD_SHARED_LIBS=ON -DGEOS_BUILD_DEVELOPER=OFF -DBUILD_TESTING=OFF \
+              "-DCMAKE_INSTALL_PREFIX=$PREFIX"
+          else
+            cmake -S "$SOURCE" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=ON -DGEOS_BUILD_DEVELOPER=OFF -DBUILD_TESTING=OFF \
+              "-DCMAKE_INSTALL_PREFIX=$PREFIX"
+          fi
+          cmake --build "$BUILD" --config Release --parallel 4
+          cmake --install "$BUILD" --config Release
+      - name: Test rebuilt library in an isolated copy (positive and negative controls)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python packaging/geos_replacement_audit.py \
+            --payload dist/portable \
+            --built dist/geos-audit/installed \
+            --source-dir dist/geos-audit/source/geos-3.14.1 \
+            --output dist/geos-audit/report.json
+      - name: Upload technical audit report (not a legal clearance)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KiKi-GEOS-replacement-audit-${{ matrix.platform }}
+          if-no-files-found: warn
+          path: kiki-layout-optimizer/dist/geos-audit/report.json
