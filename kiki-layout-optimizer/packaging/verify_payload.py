@@ -46,6 +46,32 @@ def verify(root: Path) -> tuple[int, list[str]]:
                     errors.append(f'Missing third-party license list: {component}')
         except (OSError, ValueError, TypeError) as exc:
             errors.append(f'Invalid license inventory: {exc}')
+    # The published worker must be a real onedir payload, including externally
+    # accessible LGPL GEOS shared libraries. A lone executable is rejected.
+    inventory_file = root / 'GEOS_FILES.json'
+    support = root / 'runtime' / '_internal'
+    if not support.is_dir():
+        errors.append('Missing PyInstaller onedir support folder')
+    if not inventory_file.is_file():
+        errors.append('Missing GEOS shared-library inventory')
+    else:
+        try:
+            native_inventory = json.loads(inventory_file.read_text(encoding='utf-8'))
+            if not isinstance(native_inventory, dict) or not native_inventory:
+                errors.append('GEOS inventory must contain shared library paths')
+            else:
+                for name, digest in native_inventory.items():
+                    rel = Path(name)
+                    native = (root / rel).resolve()
+                    if (not name.startswith('runtime/_internal/') or '..' in rel.parts
+                            or not native.is_relative_to(root) or not native.is_file()
+                            or not native.name.lower().endswith(('.dll', '.dylib'))
+                            or 'geos' not in native.name.lower()):
+                        errors.append(f'Unsafe/missing GEOS shared library: {name}')
+                    elif manifest.get(name) != digest:
+                        errors.append(f'GEOS SHA-256 not listed in manifest: {name}')
+        except (ValueError, OSError) as exc:
+            errors.append(f'Invalid GEOS inventory: {exc}')
     # Detect unexpected payload files. Installers also verify only manifest entries;
     # CI check disallows unaccounted-for files in a release package.
     allowed = set(manifest) | {"SHA256SUMS.json", "SHA256SUMS.txt"}

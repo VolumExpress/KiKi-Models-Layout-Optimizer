@@ -1,7 +1,7 @@
 """Create transparent no-Python-user payload from a platform-built worker.
 
 Run from the source repository, after the PyInstaller build ON THE TARGET OS:
-  python packaging/build_portable.py --worker dist/kiki-worker.exe --os windows
+  python packaging/build_portable.py --worker dist/kiki-worker/kiki-worker.exe --os windows
 """
 from __future__ import annotations
 import argparse
@@ -31,6 +31,16 @@ def build(worker:Path, output:Path, os_name:str, *, licenses_dir:Path | None = N
         raise ValueError('Refusing to delete a source directory; output must be inside dist/ or outside the repo')
     if output in worker.parents:
         raise ValueError('Worker must not be located inside output, which is overwritten')
+    # A true onedir build has its support libraries next to the launcher.
+    # Do not silently distribute legacy --onefile workers that hide GEOS.
+    support = worker.parent / '_internal'
+    if not support.is_dir():
+        raise RuntimeError('Expected PyInstaller --onedir support folder: ' + str(support))
+    geos_libraries = sorted(path for path in support.rglob('*')
+                            if path.is_file() and 'geos' in path.name.lower()
+                            and path.name.lower().endswith(('.dll', '.dylib')))
+    if not geos_libraries:
+        raise RuntimeError('GEOS shared libraries not found in the onedir support folder')
     legal_dir = (licenses_dir or ROOT / 'dist' / 'third_party_licenses').resolve()
     required = ('VERSIONS.json', 'PYTHON_LICENSE.txt', 'GEOS_LGPL-2.1.txt')
     if not legal_dir.is_dir() or any(not (legal_dir / file).is_file() for file in required):
@@ -55,6 +65,14 @@ def build(worker:Path, output:Path, os_name:str, *, licenses_dir:Path | None = N
     ext='.exe' if os_name=='windows' else ''
     binary=output/'runtime'/('kiki-worker'+ext)
     shutil.copy2(worker,binary);binary.chmod(0o755)
+    shutil.copytree(support, output/'runtime'/'_internal')
+    # Record exact paths and hashes of the externally accessible GEOS binaries.
+    geos_inventory = {}
+    for native in geos_libraries:
+        relative = (Path('runtime')/'_internal'/native.relative_to(support)).as_posix()
+        geos_inventory[relative] = hashlib.sha256(native.read_bytes()).hexdigest()
+    (output/'GEOS_FILES.json').write_text(
+        json.dumps(geos_inventory, sort_keys=True, indent=2)+'\n', encoding='utf-8')
     (output/'workspace').mkdir()
     (output/'presets').mkdir()
     (output/'VERSION').write_text('0.7.2\n',encoding='utf8')

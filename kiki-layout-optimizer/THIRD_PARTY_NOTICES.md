@@ -20,11 +20,34 @@ These files are included in the checksum manifest and preserved in the installed
 
 ## GEOS / LGPL-2.1 — additional release obligations
 
-GEOS is a **separate LGPL-licensed library**. The fact that KiKi's own code is MIT-licensed, or that the GEOS license text has been included, **does not by itself discharge LGPL redistribution obligations**. Before publishing binary executables, the distributor must review the actual GEOS linking/bundling model used by **PyInstaller onefile**, verify its ability to replace or relink the bundled LGPL library where required, provide or arrange compliant access to the **corresponding GEOS source code** (including applicable modifications/build scripts), and meet any other obligations of the license. `VERSIONS.json` records the build's exact GEOS version and a corresponding upstream source location; an upstream link alone is not asserted to satisfy all applicable requirements. See GNU LGPL-2.1 sections 4 and 6.
+GEOS is a **separate LGPL-licensed library**. The fact that KiKi's own code is MIT-licensed, or that the GEOS license text has been included, **does not by itself discharge LGPL redistribution obligations**. Before publishing binary executables, the distributor must review the actual GEOS linking/bundling model used by **PyInstaller onedir**, verify its ability to replace or relink the bundled LGPL library where required, provide or arrange compliant access to the **corresponding GEOS source code** (including applicable modifications/build scripts), and meet any other obligations of the license. `VERSIONS.json` records the build's exact GEOS version and a corresponding upstream source location; an upstream link alone is not asserted to satisfy all applicable requirements. See GNU LGPL-2.1 sections 4 and 6.
 
-GEOS распространяется по LGPL. Наличие текста LGPL и списка версий **само по себе не завершает проверку правомерности распространения**. Перед публикацией готового бинарника следует проверить модель динамической загрузки/замены GEOS внутри `PyInstaller --onefile`, обеспечить выполнение условий о соответствующих исходниках/возможности модификации и перелинковки в применимой форме, а также остальных условий LGPL. В `VERSIONS.json` фиксируется версия и ссылка на исходники; эта ссылка не считается универсальным подтверждением соответствия LGPL.
+GEOS распространяется по LGPL. Наличие текста LGPL и списка версий **само по себе не завершает проверку правомерности распространения**. Перед публикацией готового бинарника следует проверить модель динамической загрузки/замены GEOS внутри `PyInstaller --onedir`, обеспечить выполнение условий о соответствующих исходниках/возможности модификации и перелинковки в применимой форме, а также остальных условий LGPL. В `VERSIONS.json` фиксируется версия и ссылка на исходники; эта ссылка не считается универсальным подтверждением соответствия LGPL.
 
 **Binary release gate / Условие публичного выпуска:** the GEOS LGPL compliance review must be completed independently of passing CI. Until then, built artifacts are technical release candidates, not legal clearance to distribute. / До отдельной проверки условий LGPL бинарники считаются техническими кандидатами на выпуск.
+
+## GEOS onedir distribution / Распространение GEOS с onedir
+
+The binary builder uses PyInstaller `--onedir` rather than `--onefile`.
+GEOS shared libraries are separately visible under `runtime/_internal/`, and
+`GEOS_FILES.json` lists their exact relative paths and SHA-256 digests. The
+portable archive checksums cover them, as do the Windows Setup and macOS DMG
+(both are built around the same portable payload).
+
+Сборка размещает динамические библиотеки GEOS отдельными файлами в
+`runtime/_internal/`; имена и контрольные суммы записаны в `GEOS_FILES.json`.
+Пользователю не нужен установленный Python. Заменить библиотеку для
+эксперимента можно в копии установленного приложения, соблюдая совместимость
+ABI. Такая возможность **должна быть реально проверена на Windows/macOS**.
+
+Technical replacement procedure: [RU](docs/ru/GEOS-DISTRIBUTION.md) / [EN](docs/en/GEOS-DISTRIBUTION.md).
+
+**Release gate:** the physical presence of replaceable shared libraries alone
+is NOT legal confirmation of compliance with LGPL-2.1 §6. Review the
+application's actual loader behavior with a modified ABI-compatible GEOS,
+applicable source-code distribution obligations, and all notices before
+publishing binaries. See the upstream license at
+https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html .
 
 ## Build-only tooling / Инструменты сборки
 

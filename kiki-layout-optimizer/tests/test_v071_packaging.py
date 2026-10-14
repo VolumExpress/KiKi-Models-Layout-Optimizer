@@ -35,10 +35,17 @@ def test_portable_staging_has_manifest_and_no_private_exports(tmp_path):
             'geos':['GEOS_LGPL-2.1.txt'],
         },
     }),encoding='utf-8')
+    internal=worker.parent/'_internal'
+    internal.mkdir()
+    (internal/'geos_c-test.dll').write_bytes(b'GEOS LIBRARY TEST FIXTURE')
+    (internal/'python312.dll').write_bytes(b'PYTHON RUNTIME TEST FIXTURE')
     root=tmp_path/'portable'
     build.build(worker,root,'windows',licenses_dir=legal)
     assert (root/'third_party_licenses/VERSIONS.json').is_file()
     assert (root/'runtime/kiki-worker.exe').read_bytes()==worker.read_bytes()
+    assert (root/'runtime/_internal/python312.dll').exists()
+    assert (root/'runtime/_internal/geos_c-test.dll').exists()
+    assert 'runtime/_internal/geos_c-test.dll' in json.loads((root/'GEOS_FILES.json').read_text())
     assert (root/'README_RU.md').exists() and (root/'README_EN.md').exists()
     assert (root/'installers/windows/install.cmd').exists()
     assert not list(root.rglob('input_copy.json'))

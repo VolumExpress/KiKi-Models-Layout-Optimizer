@@ -26,16 +26,24 @@ def test_windows_payload_integrity(tmp_path):
     }),encoding='utf-8')
     worker=tmp_path/'worker.exe'
     worker.write_bytes(b'MZ-SYNTHETIC-TEST-ONLY')
+    (tmp_path/'_internal').mkdir()
+    (tmp_path/'_internal'/'geos_c-test.dll').write_bytes(b'GEOS-C TEST LIBRARY')
+    (tmp_path/'_internal'/'geos-test.dll').write_bytes(b'GEOS TEST LIBRARY')
     output=tmp_path/'package'
     load('build_portable').build(worker,output,'windows',licenses_dir=legal)
     count,errors=load('verify_payload').verify(output)
     assert count>20 and not errors
     assert (output/'SHA256SUMS.txt').read_text().count('\n')==count
+    assert (output/'GEOS_FILES.json').is_file()
+    assert len(json.loads((output/'GEOS_FILES.json').read_text())) == 2
     (output/'runtime/kiki-worker.exe').write_bytes(b'MZCORRUPT')
     _,errors=load('verify_payload').verify(output)
     assert any('Checksum mismatch' in e for e in errors)
     (output/'runtime/kiki-worker.exe').write_bytes(b'MZ-SYNTHETIC-TEST-ONLY')
     (output/'third_party_licenses/GEOS_LGPL-2.1.txt').write_text('CORRUPTED',encoding='utf-8')
+    _,errors=load('verify_payload').verify(output)
+    assert any('Checksum mismatch' in e for e in errors)
+    (output/'runtime/_internal/geos_c-test.dll').write_bytes(b'TAMPERED GEOS')
     _,errors=load('verify_payload').verify(output)
     assert any('Checksum mismatch' in e for e in errors)
 
@@ -62,3 +70,11 @@ def test_installer_sources_are_separate_and_preserve_user_data():
         content=(ROOT/relative).read_text(encoding='utf8')
         assert 'KiKiModels' in content or 'workspace' in content or 'SHA256SUMS' in content
     assert (ROOT/'packaging/smoke_runtime.py').is_file()
+
+
+def test_legacy_onefile_worker_rejected(tmp_path):
+    worker=tmp_path/'single-worker.exe'
+    worker.write_bytes(b'MZ onefile fixture')
+    import pytest
+    with pytest.raises(RuntimeError,match='--onedir'):
+        load('build_portable').build(worker,tmp_path/'payload','windows')
