@@ -1,0 +1,17 @@
+/* Per-document local workspace under the project root (Windows/macOS). */
+function kikiWorkspace(doc) {
+  if(typeof File !== 'function' || typeof Folder !== 'function') return null;
+  var src=new File($.fileName), root=src.parent.parent;
+  var container=new Folder(root.fsName+'/workspace');
+  if(!container.exists && !container.create())throw Error('Cannot create workspace');
+  var label=String(doc.name).replace(/[\\\/:*?"<>|]/g,'_').replace(/\.ai$/i,'').replace(/\s+/g,'_');
+  if(label.length>72)label=label.substring(0,72);
+  if(!label) label='Illustrator';
+  var folder=new Folder(container.fsName+'/'+label);
+  if(!folder.exists && !folder.create())throw Error('Cannot create document workspace');
+  return folder;
+}
+function kikiWorkspaceFile(doc,name) {
+  var folder=kikiWorkspace(doc);
+  return folder ? new File(folder.fsName+'/'+name) : null;
+}

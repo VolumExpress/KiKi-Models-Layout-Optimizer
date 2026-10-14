@@ -1,0 +1,31 @@
+/* Optional receipt for desktop GUI bridge. Direct File > Scripts also works. */
+function kikiBridgeReceipt(action, status, detail, filePath) {
+  try {
+    var root=new File($.fileName).parent.parent;
+    var bridgeDir=new Folder(root.fsName+'/workspace/_bridge');
+    var request=new File(bridgeDir.fsName+'/request.json');
+    if (!request.exists) return;
+    request.encoding='UTF-8';if(!request.open('r'))return;
+    var parsed=kikiParseJSON(request.read());request.close();
+    if(!parsed || parsed.action!==action || !/^[a-f0-9]{32}$/.test(parsed.nonce))return;
+    var response=new File(bridgeDir.fsName+'/'+parsed.nonce+'.json');
+    response.encoding='UTF-8';if(!response.open('w'))return;
+    response.write(kikiStringify({action:action,nonce:parsed.nonce,status:status,
+      detail:String(detail||''),path:String(filePath||'')}));
+    response.close();
+  } catch(ignored) { /* never prevent export or application of geometry */ }
+}
+
+/* True only while the CEP host adapter has queued this exact action.
+   Suppresses redundant success alerts inside the unified panel while preserving
+   standalone File > Scripts behaviour. */
+function kikiBridgeIsRequested(action) {
+  try {
+    var root=new File($.fileName).parent.parent;
+    var request=new File(root.fsName+'/workspace/_bridge/request.json');
+    if(!request.exists)return false;
+    request.encoding='UTF-8';if(!request.open('r'))return false;
+    var parsed=kikiParseJSON(request.read());request.close();
+    return !!parsed && parsed.action===action && /^[a-f0-9]{32}$/.test(parsed.nonce);
+  }catch(ignore){return false;}
+}

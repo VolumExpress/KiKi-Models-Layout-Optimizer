@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KiKi Models — Layout Optimizer</title>
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;color:#e7e9ee;background:#292c30;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;padding:12px;font-size:12px;line-height:1.4}h1{font-size:16px;margin:0}h2{font-size:13px;margin:14px 0 6px}
+header{display:flex;align-items:center;gap:9px;margin-bottom:10px}header img{width:38px;height:38px;object-fit:contain}small,.muted{font-size:11px;color:#b5c0ca}
+.flex{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.grow{flex:1}.between{justify-content:space-between}
+.controls{display:flex;gap:6px;flex-wrap:wrap}.controls button{flex:1 1 90px}
+button{background:#496c8b;color:#f7f9fb;border:1px solid #6887a2;border-radius:5px;min-height:31px;padding:5px 8px;cursor:pointer}
+button:hover{background:#567e9f}button:disabled{opacity:.45;cursor:not-allowed}.alt{background:#383e44;border-color:#626b76}.danger{background:#6d4140;border-color:#9b6867}
+input,select{font-family:inherit;font-size:12px;color:#f3f6f9;background:#363c43;border:1px solid #626a75;border-radius:3px;padding:6px;min-width:0;width:100%}
+label{font-size:11px;color:#c3cfdb;display:block;margin-bottom:3px}.fields{display:flex;gap:7px;flex-wrap:wrap}.field{flex:1 1 115px;min-width:0;margin:3px 0 6px}
+.field.wide{flex:2 1 210px}.tiny{max-width:75px}.margins .field{flex:1 1 54px}#kerfWrap{display:none}
+section{padding:9px 0;border-bottom:1px solid #424950}.pill{display:inline-block;background:#364f5d;color:#cfeaff;padding:2px 6px;border-radius:4px;font-size:11px}
+.help{display:inline-block;vertical-align:baseline;min-height:18px;padding:0 5px;margin-left:3px;background:#4c515a;border:1px solid #656d77}
+details{font-size:11px;background:#30363c;padding:5px 7px;border-radius:4px;margin:4px 0}details summary{cursor:pointer;color:#c2d8e7}details p{margin:5px 0}
+#progressOuter{width:100%;height:12px;background:#191d21;border-radius:5px;overflow:hidden;margin:6px 0}#progressFill{width:0;height:100%;background:#52a58b;transition:width .17s}#status{padding:7px 8px;border-left:3px solid #78a3c4;background:#202429;overflow-wrap:anywhere;white-space:pre-wrap;min-height:34px}
+#report{font-size:11px;color:#c4d2de;margin:6px 0;min-height:15px}#preview{width:100%;height:auto;max-height:380px;min-height:130px;object-fit:contain;background:#fff;border-radius:2px;border:1px solid #59646e}
+#previewEmpty{background:#24282d;color:#9daaba;min-height:120px;display:flex;justify-content:center;align-items:center;text-align:center;padding:12px}
+#logs{width:100%;max-height:120px;min-height:63px;overflow-y:auto;background:#191d21;font-family:Consolas,monospace;color:#b9c8d4;font-size:10px;padding:6px;white-space:pre-wrap;overflow-wrap:anywhere}
+.hidden{display:none!important}#presets{min-width:120px;max-width:200px}.note{font-size:11px;color:#adbdc9;margin-top:7px}.help-example{display:flex;gap:7px;margin:8px 0}.help-example>div{flex:1;border:1px solid #56616b;border-radius:4px;padding:7px;min-width:0}.help-example b{font-weight:600}.help-example svg{display:block;width:100%;height:62px;margin:3px 0}.help-example em{display:block;font-size:10px;color:#aebbc6;font-style:normal}.fineprint{font-size:10px;color:#aebdca}.checkline{margin:5px 0;display:block}.checkline input{vertical-align:middle}
+@media(max-width:355px){body{padding:8px}.field{flex-basis:105px}.controls button{flex-basis:100px}header img{width:30px;height:30px}}
+</style><script src="config.js"></script></head>
+<body>
+<header><img src="kiki-icon.png" alt="KiKi"><div class="grow"><h1>KiKi Models</h1><small id="subtitle">Оптимизация раскладки</small></div><button id="lang" class="alt" style="min-height:24px">EN</button></header>
+<section>
+ <div class="controls"><button id="export">Экспорт выделения</button><button id="calculate">Рассчитать</button><button id="apply">Применить</button></div>
+ <div class="muted" id="documentName">Документ не выбран</div>
+ <details><summary data-i18n="workflowHelp">Как начать работу?</summary><p data-i18n="workflowDescription">Выделите эмблемы в Illustrator → Экспорт → настройте раскладку → Рассчитать → проверьте предпросмотр → Применить. После изменения вектора экспортируйте повторно. Работайте с копией .ai.</p></details>
+</section>
+<section>
+ <div class="fields"><div class="field"><label for="operation" data-i18n="operation">Технология</label><select id="operation"><option value="engrave">Гравировка</option><option value="cut">Резка</option></select></div>
+ <div class="field"><label for="mode" data-i18n="mode">Режим раскладки</label><select id="mode"><option value="uniform">Uniform</option><option value="dense">Dense</option><option value="ordered">Ordered</option></select></div>
+ <div class="field" id="kerfWrap"><label for="kerf" data-i18n="kerf">Пропил, мм</label><input id="kerf" value="0.15" inputmode="decimal"></select></div></div>
+ <details><summary data-i18n="operationHelp">Гравировка или резка?</summary><p data-i18n="operationDescription">Гравировка размещает изображения с зазором. При резке учитывается ширина пропила между отдельными деталями. Программа не создаёт готовую траекторию станка.</p></details>
+ <details><summary data-i18n="modeHelp">Что означают режимы?</summary><p data-i18n="modeDescription">Dense — плотнее; Uniform — ровнее интервалы; Ordered — сохраняет порядок объектов, не координаты.</p></details>
+ <div class="fields"><div class="field"><label for="families" data-i18n="families">Группировка эмблем</label><select id="families"><option value="named">По коду символа</option><option value="auto">По силуэту</option><option value="off">Без группировки</option></select></div>
+ <div class="field"><label for="rotation" data-i18n="rotation">Повороты</label><select id="rotation"><option value="0">0°</option><option value="0,180">0°, 180°</option><option value="0,90,180,270">0°, 90°, 180°, 270°</option></select></div></div>
+ <details><summary data-i18n="familyHelp">Как работает группировка?</summary><p data-i18n="familyDescription">По коду — известные идентификаторы серии; по силуэту — автоматическое сравнение формы; без группировки — фигуры размещаются независимо. Отчёт о семействах показывает распознавание, а не порядок размещения.</p></details>
+ <details><summary data-i18n="rotationHelp">Когда разрешать поворот?</summary><p data-i18n="rotationDescription">0° сохраняет исходную ориентацию. Переворот на 180° и поворот на 90° могут сделать стрелки, цифры и знаки неверными по смыслу. Для отдельных объектов разрешённые углы можно переопределить ниже.</p></details>
+ <div class="fields"><div class="field"><label for="flow" data-i18n="flow">Порядок размещения</label><select id="flow"><option value="free">Свободно</option><option value="rows">Рядами</option><option value="columns">Столбцами</option></select></div>
+ <div class="field"><label for="travel" data-i18n="travel">Расчёт переходов</label><select id="travel"><option value="nearest">Ближайший</option><option value="rows">По рядам</option><option value="columns">По столбцам</option><option value="source">Исходный</option></select></div>
+ <div class="field"><label for="gap" data-i18n="gap">Зазор / перемычка, мм</label><input id="gap" inputmode="decimal" value="0.8"></div></div>
+ <div class="fields"><div class="field wide"><label for="familyLayout" data-i18n="familyLayout">Организация семейств</label>
+ <select id="familyLayout"><option value="compact">Компактная укладка</option><option value="family_first">Упорядоченные семейства</option></select></div></div>
+ <label class="checkline"><input type="checkbox" id="outlineAware" style="width:auto"> <span data-i18n="outlineAware">Учитывать толщину контуров при поиске похожих серий (эксперимент)</span></label>
+ <div class="fineprint" id="outlineMatchContext" data-i18n="outlineMatchContext">Доступно при группировке «По силуэту».</div>
+ <details><summary data-i18n="familyLayoutHelp">Чем отличаются варианты?</summary><p data-i18n="familyLayoutNote">Компактно — меньше используемая площадь. Упорядоченно — серии разных размеров располагаются вместе, но занимают больше места. Это не улучшение распознавания фигур.</p>
+ <div class="help-example">
+ <div><b data-i18n="compactExample">Компактно</b><svg viewBox="0 0 126 62" aria-hidden="true"><g fill="none" stroke="#9ac7e3" stroke-width="2" stroke-linejoin="round"><path transform="translate(18 13) scale(.7)" d="M0 -13 L13 0 L5 0 L5 15 L-5 15 L-5 0 L-13 0 Z"/><path transform="translate(75 32) scale(1.3)" d="M0 -13 L13 0 L5 0 L5 15 L-5 15 L-5 0 L-13 0 Z"/><path transform="translate(35 48) scale(.55)" d="M0 -13 L13 0 L5 0 L5 15 L-5 15 L-5 0 L-13 0 Z"/></g><circle cx="111" cy="9" r="8" fill="#8c9cab"/></svg><em data-i18n="compactExampleNote">Важнее плотность</em></div>
+ <div><b data-i18n="orderedExample">Сериями</b><svg viewBox="0 0 126 62" aria-hidden="true"><g fill="none" stroke="#9ac7e3" stroke-width="2" stroke-linejoin="round"><path transform="translate(19 32) scale(.65)" d="M0 -13 L13 0 L5 0 L5 15 L-5 15 L-5 0 L-13 0 Z"/><path transform="translate(57 32) scale(.95)" d="M0 -13 L13 0 L5 0 L5 15 L-5 15 L-5 0 L-13 0 Z"/><path transform="translate(100 32) scale(1.3)" d="M0 -13 L13 0 L5 0 L5 15 L-5 15 L-5 0 L-13 0 Z"/></g></svg><em data-i18n="orderedExampleNote">Важнее порядок размеров</em></div>
+ </div></details>
+ <details><summary data-i18n="travelHelp">Размещение и переходы — в чём разница?</summary><p data-i18n="travelDescription">Размещение меняет координаты. Переходы оценивают условный обход центров фигур, не являются реальным маршрутом станка.</p></details>
+ <details><summary data-i18n="clearanceHelp">Как выбрать зазор и поля?</summary><p data-i18n="clearanceDescription">Зазор — минимальное расстояние между отдельными эмблемами. Поля — минимальные расстояния до четырёх границ пластины. В режиме резки дополнительно учитывается ширина пропила. Значения в миллиметрах.</p></details>
+ <details id="advancedSearchPanel"><summary data-i18n="searchHelp">Расширенный поиск (v0.7)</summary>
+ <div class="fields"><div class="field"><label for="trials" data-i18n="trialsLabel">Попыток раскладки</label><select id="trials"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="8">8</option></select></div>
+ <div class="field"><label for="timeBudget" data-i18n="timeBudgetLabel">Бюджет времени, с</label><input id="timeBudget" value="35" inputmode="decimal"></div>
+ <div class="field"><label for="seed" data-i18n="seedLabel">Код повторения расчёта</label><input id="seed" value="42"></div></div>
+ <label><input type="checkbox" id="advancedSearch" style="width:auto"> <span data-i18n="advancedSearchLabel">Дополнительная локальная перепаковка (эксперимент)</span></label>
+ <div class="muted" data-i18n="advancedSearchNote">Перепаковка нескольких семейств; проверка исходных контуров и откат при ухудшении.</div>
+ <label><input type="checkbox" id="advancedGeometry" style="width:auto"> <span data-i18n="advancedGeometryLabel">Поиск для сложных контуров (эксперимент)</span></label>
+ <div class="muted" data-i18n="advancedGeometryNote">NFP для контуров в пределах лимита сложности. Для сложных групп — запасной поиск. Улучшение не гарантировано.</div>
+ <label><input type="checkbox" id="contourAnchors" style="width:auto"> <span data-i18n="contourAnchorsLabel">Дополнительные опорные точки (эксперимент)</span></label>
+ <div class="flex"><button id="showBest" class="alt" type="button" data-i18n="showBest">Посмотреть лучший промежуточный вариант</button></div>
+ <p class="muted" data-i18n="searchNote">Алгоритм выбирает лучший геометрически проверенный вариант. Время ограничено приблизительно: текущая попытка завершается полностью.</p>
+ </details>
+ <details id="multiObjectivePanel"><summary data-i18n="multiTitle">Приоритеты раскладки</summary>
+ <label><input type="checkbox" id="multiEnabled" style="width:auto"> <span data-i18n="multiEnabled">Выбирать лучший вариант по 3 целям</span></label>
+ <label><input type="checkbox" id="guidedObjectives" style="width:auto"> <span data-i18n="guidedObjectives">Эксперимент: учитывать веса при поиске позиций (может ухудшить раскладку)</span></label>
+ <div class="fields"><div class="field wide"><label for="objectivePreset" data-i18n="objectivePreset">Готовый профиль</label><select id="objectivePreset"><option value="balanced">Баланс</option><option value="compact">Плотность</option><option value="uniform">Равномерность</option><option value="travel">Переходы</option><option value="custom">Свой</option></select></div></div>
+ <div class="fields"><div class="field"><label for="wArea" data-i18n="areaWeight">Плотность (0–10)</label><input id="wArea" value="5" inputmode="decimal"></div>
+ <div class="field"><label for="wSpacing" data-i18n="spacingWeight">Равномерность (0–10)</label><input id="wSpacing" value="3.5" inputmode="decimal"></div>
+ <div class="field"><label for="wTravel" data-i18n="travelWeight">Переходы (0–10)</label><input id="wTravel" value="1.5" inputmode="decimal"></div></div>
+ <p class="muted" data-i18n="multiNote">По умолчанию веса выбирают лучший из готовых вариантов. Чтобы направлять сам поиск, отдельно включите экспериментальную опцию выше. Переходы — лишь оценка, не время станка.</p>
+ </details>
+ <details id="paretoReview"><summary data-i18n="paretoTitle">Другие допустимые варианты</summary>
+ <p class="muted" data-i18n="paretoNote">Просмотр только. Итоговый файл применения не меняется.</p>
+ <div class="fields"><div class="field"><select id="paretoSelect" aria-label="Pareto variant"><option value="">—</option></select></div>
+ <div class="field"><button id="showPareto" class="alt" type="button" data-i18n="paretoShow">Показать вариант</button></div></div>
+ <div class="muted" id="paretoSummary"></div></details>
+ <div id="cutAuditWrap" style="display:none"><label><input type="checkbox" id="commonLineAudit" style="width:auto"> <span data-i18n="commonLineLabel">Проверить общие линии в исходных контурах (только аудит)</span></label>
+ <p class="muted" data-i18n="commonLineNote">Показывает совпадающие границы исходных деталей. Не заменяет проверку пропила и не создаёт готовый путь резки.</p></div>
+ <label data-i18n="margins">Отступы от края, мм — слева / сверху / справа / снизу</label>
+ <div class="fields margins"><div class="field"><input id="margin_left" aria-label="left" value="2"></div><div class="field"><input id="margin_top" aria-label="top" value="2"></div><div class="field"><input id="margin_right" aria-label="right" value="2"></div><div class="field"><input id="margin_bottom" aria-label="bottom" value="2"></div></div>
+</section>
+<section>
+ <div class="flex between"><strong data-i18n="rulesTitle">Ограничения выбранных объектов</strong><span class="pill" id="rulesCount">0</span></div>
+ <div class="fields"><div class="field"><label><input type="checkbox" id="lockPosition" style="width:auto"/> <span data-i18n="lock">Не перемещать</span></label></div><div class="field"><label for="ruleRotation" data-i18n="perRotation">Повороты выделенных</label><select id="ruleRotation"><option value="global">Общие</option><option value="0">0°</option><option value="0,180">0°, 180°</option><option value="0,90,180,270">Все</option></select></div></div>
+ <button id="saveRules" class="alt" data-i18n="saveRules">Сохранить ограничения для выделенных</button>
+ <details><summary data-i18n="rulesHelp">Как закрепить эмблемы?</summary><p data-i18n="rulesDescription">Сначала экспортируйте все эмблемы. Затем выделите нужные на холсте Illustrator, отметьте «Не перемещать» или задайте повороты и сохраните. Правила применяются к текущему экспорту; после изменения рисунка экспортируйте заново.</p></details>
+</section>
+<section>
+ <div class="flex between"><strong data-i18n="presetsTitle">Пресеты</strong><button id="refreshPresets" class="alt" data-i18n="refresh" style="min-height:24px">Обновить</button></div>
+ <div class="fields"><div class="field wide"><select id="presets" aria-label="presets"><option value="">Выберите пресет…</option></select></div><div class="field"><button id="loadPreset" class="alt" data-i18n="load">Загрузить</button></div></div>
+ <div class="fields"><div class="field wide"><input id="presetName" placeholder="Имя нового пресета" maxlength="48"></div><div class="field"><button id="savePreset" class="alt" data-i18n="savePreset">Сохранить пресет</button></div></div>
+ <details><summary data-i18n="presetHelp">Что сохраняет пресет?</summary><p data-i18n="presetDescription">Пресет хранит режим, зазоры, поля, повороты и параметры поиска. Он не хранит изображения и не переносит закрепления из одного документа в другой.</p></details>
+</section>
+<section>
+ <div class="flex between"><strong data-i18n="progressTitle">Прогресс</strong><button id="cancel" class="danger hidden" data-i18n="cancel">Отменить</button></div>
+ <div id="progressOuter"><div id="progressFill"></div></div><div class="muted" id="stage">Ожидание</div>
+ <div id="status" role="status" aria-live="polite">Готово. Экспортируйте выделение.</div>
+ <div id="report"></div>
+ <details id="familiesReview"><summary data-i18n="familyReviewTitle">Проверить найденные семейства</summary>
+ <p data-i18n="familyReviewNote">Состав групп зависит от выбранного способа распознавания. Режим организации семейств может изменить раскладку без изменения этого списка.</p>
+ <label class="checkline"><input type="checkbox" id="showFamilyIds" style="width:auto"/> <span data-i18n="showFamilyIds">Показать технические ID и исходные имена</span></label>
+ <div id="familyReviewContent" class="muted" style="max-height:210px;overflow:auto;white-space:pre-wrap"></div></details>
+</section>
+<section>
+ <div class="flex between"><strong data-i18n="previewTitle">Предпросмотр</strong><div class="flex"><button id="showPreview" class="alt" data-i18n="plate" style="min-height:24px">Пластина</button><button id="showRoute" class="alt" data-i18n="route" style="min-height:24px">Переходы</button></div></div>
+ <div id="previewEmpty" data-i18n="noPreview">После расчёта здесь появится схема пластины</div><img id="preview" class="hidden" alt="KiKi calculated layout preview"/>
+ <div class="note" data-i18n="previewNote">SVG — приближение. Перед производством проверьте контуры в Illustrator.</div>
+</section>
+<section><div class="flex between"><strong data-i18n="logsTitle">Журнал</strong><button id="languageAI" class="alt" data-i18n="languageAI" style="min-height:24px">Язык Illustrator</button></div><div id="logs" aria-live="polite"></div></section>
+<script src="panel.js"></script></body></html>

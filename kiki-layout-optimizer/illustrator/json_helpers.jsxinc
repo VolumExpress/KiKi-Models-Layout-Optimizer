@@ -1,0 +1,85 @@
+/* Minimal JSON parser + stringifier for older ExtendScript ES3 engines.
+   No eval, and no script content is executed from JSON. */
+function kikiStringify(value) {
+  if (value === null) return "null";
+  var t = typeof value;
+  if (t === "string") {
+    var out='"';
+    for (var i=0;i<value.length;i++) {
+      var c=value.charAt(i), n=value.charCodeAt(i);
+      if (c==='"') out+='\\"';
+      else if (c==='\\') out+='\\\\';
+      else if (c==='\n') out+='\\n';
+      else if (c==='\r') out+='\\r';
+      else if (c==='\t') out+='\\t';
+      else if (n<32) out+='\\u'+('000'+n.toString(16)).slice(-4);
+      else out+=c;
+    }
+    return out+'"';
+  }
+  if (t === "number") return isFinite(value) ? String(value) : "null";
+  if (t === "boolean") return value ? "true" : "false";
+  var chunks=[];
+  if (value instanceof Array) {
+    for (var j=0;j<value.length;j++) chunks.push(kikiStringify(value[j]));
+    return '['+chunks.join(',')+']';
+  }
+  for (var key in value) {
+    if (value.hasOwnProperty(key) && typeof value[key] !== 'undefined')
+      chunks.push(kikiStringify(key)+':'+kikiStringify(value[key]));
+  }
+  return '{'+chunks.join(',')+'}';
+}
+
+function kikiParseJSON(str) {
+  var i=0;
+  function white(){while(i<str.length && /[ \t\r\n]/.test(str.charAt(i)))i++;}
+  function fail(){throw Error('Invalid JSON at character '+i);}
+  function parseString(){
+    if(str.charAt(i++) !== '"') fail();
+    var out='';
+    while(i<str.length){
+      var c=str.charAt(i++);
+      if(c==='"')return out;
+      if(c==='\\') {
+        var e=str.charAt(i++);
+        if(e==='u') {
+          var h=str.substr(i,4);
+          if(!/^[0-9a-fA-F]{4}$/.test(h))fail();
+          out+=String.fromCharCode(parseInt(h,16)); i+=4;
+        } else if(e==='n')out+='\n';
+        else if(e==='r')out+='\r';
+        else if(e==='t')out+='\t';
+        else if(e==='b')out+='\b';
+        else if(e==='f')out+='\f';
+        else if(e==='"')out+='"';
+        else if(e==='\\')out+='\\';
+        else if(e==='/')out+='/';
+        else fail();
+      }else{
+        if(c.charCodeAt(0)<32)fail();
+        out+=c;
+      }
+    }
+    fail();
+  }
+  function value(){
+    white(); var c=str.charAt(i);
+    if(c==='"')return parseString();
+    if(c==='['){i++;var arr=[];white();if(str.charAt(i)===']'){i++;return arr;}
+      while(true){arr.push(value());white();if(str.charAt(i)===']'){i++;return arr;}
+        if(str.charAt(i++)!==',')fail();}}
+    if(c==='{'){i++;var obj={};white();if(str.charAt(i)==='}'){i++;return obj;}
+      while(true){white();if(str.charAt(i)!=='"')fail();var k=parseString();white();
+        if(str.charAt(i++)!==':')fail();obj[k]=value();white();
+        if(str.charAt(i)==='}'){i++;return obj;}
+        if(str.charAt(i++)!==',')fail();}}
+    if(str.substr(i,4)==='true'){i+=4;return true;}
+    if(str.substr(i,5)==='false'){i+=5;return false;}
+    if(str.substr(i,4)==='null'){i+=4;return null;}
+    var m=str.substring(i).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+\-]?\d+)?/);
+    if(m){i+=m[0].length;return Number(m[0]);}
+    fail();
+  }
+  var o=value();white();if(i!==str.length)fail();return o;
+}

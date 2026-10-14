@@ -1,0 +1,159 @@
+name: Build separate optional portable installers
+on:
+  workflow_dispatch:
+  pull_request:
+permissions:
+  contents: read
+defaults:
+  run:
+    working-directory: kiki-layout-optimizer
+jobs:
+  runtime:
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build requirements
+        run: python -m pip install -e '.[test]' pyinstaller
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JavaScript tests
+        shell: bash
+        run: for f in tests/*.cjs; do node "$f" || exit 1; done
+      - name: Unit tests
+        run: python -m pytest -q
+      - name: Collect exact runtime license texts
+        run: python packaging/collect_licenses.py
+      - name: Build bundled Python worker on native OS
+        run: pyinstaller --noconfirm --clean --onefile --name kiki-worker --paths src packaging/worker_entry.py
+      - name: Sanity test executable
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == windows ]]; then dist/kiki-worker.exe --help; else dist/kiki-worker --help; fi
+      - name: Assemble portable archive
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == windows ]]; then python packaging/build_portable.py --worker dist/kiki-worker.exe --os windows --output dist/portable; else python packaging/build_portable.py --worker dist/kiki-worker --os macos --output dist/portable; fi
+      - name: Verify portable payload (hashes + contents)
+        run: python packaging/verify_payload.py dist/portable
+      - name: Compute an actual layout with the frozen worker
+        run: python packaging/smoke_runtime.py dist/portable
+      - name: Archive transparent portable package
+        shell: bash
+        run: |
+          python -c "import shutil; shutil.make_archive('dist/KiKi-v0.7.2-${{ matrix.platform }}-portable','zip','dist','portable')"
+      - name: Archive checksum for portable ZIP
+        shell: bash
+        run: |
+          python -c "import hashlib,pathlib;f=pathlib.Path('dist/KiKi-v0.7.2-${{ matrix.platform }}-portable.zip'); f.with_suffix('.zip.sha256').write_text(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name+'\n')"
+      - name: Upload packaged portable runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: KiKi-v0.7.2-${{ matrix.platform }}-portable
+          path: |
+            kiki-layout-optimizer/dist/KiKi-v0.7.2-${{ matrix.platform }}-portable.zip
+            kiki-layout-optimizer/dist/KiKi-v0.7.2-${{ matrix.platform }}-portable.zip.sha256
+      - name: Build optional Windows GUI installer
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          choco install nsis --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "NSIS installation failed" }
+          & 'C:\Program Files (x86)\NSIS\makensis.exe' /DPAYLOAD="$((Resolve-Path 'dist/portable').Path)" /DOUTPUT="${{ github.workspace }}\kiki-layout-optimizer\dist\KiKi-v0.7.2-Windows-Setup.exe" packaging/KiKiSetup.nsi
+          if ($LASTEXITCODE -ne 0) { throw "NSIS build failed" }
+          $setup = Get-Item dist/KiKi-v0.7.2-Windows-Setup.exe
+          $hash = (Get-FileHash -LiteralPath $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($setup.Name)" | Set-Content -Encoding ascii "$($setup.FullName).sha256"
+      - name: Upload GUI installer independently
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KiKi-v0.7.2-Windows-Setup
+          if-no-files-found: error
+          path: |
+            kiki-layout-optimizer/dist/KiKi-v0.7.2-Windows-Setup.exe
+            kiki-layout-optimizer/dist/KiKi-v0.7.2-Windows-Setup.exe.sha256
+      - name: Build macOS DMG installer
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="dist/KiKi-DMG-Contents"
+          mkdir -p "$STAGE"
+          ditto dist/portable "$STAGE"
+
+          cat > "$STAGE/Install KiKi Models.command" <<'EOF'
+          #!/bin/bash
+          ROOT="$(cd "$(dirname "$0")" && pwd)"
+          /bin/bash "$ROOT/installers/macos/install.command"
+          RESULT=$?
+          echo "Installer exit code: $RESULT"
+          read -r -p "Press Return to close..." _
+          exit "$RESULT"
+          EOF
+          chmod +x "$STAGE/Install KiKi Models.command"
+
+          cat > "$STAGE/START_HERE.txt" <<'EOF'
+          KiKi Models Layout Optimizer v0.7.2 Beta
+
+          Open "Install KiKi Models.command" in Finder.
+          Inspect installers/macos/install.command before installing.
+          Restart Adobe Illustrator after installation.
+
+          This unsigned beta is not notarized by Apple.
+          Native Illustrator integration on macOS is untested.
+
+          Откройте Install KiKi Models.command в Finder.
+          Перед установкой проверьте исходный скрипт.
+          Перезапустите Illustrator после установки.
+
+          Сборка не подписана и не проверена в Illustrator на macOS.
+          EOF
+
+          hdiutil create -ov \
+            -volname "KiKi Models v0.7.2 Beta" \
+            -srcfolder "$STAGE" \
+            -format UDZO \
+            dist/KiKi-v0.7.2-macos-installer.dmg
+
+          hdiutil verify dist/KiKi-v0.7.2-macos-installer.dmg
+
+          mkdir -p dist/dmg-mount
+          hdiutil attach -readonly -nobrowse \
+            -mountpoint dist/dmg-mount \
+            dist/KiKi-v0.7.2-macos-installer.dmg
+
+          (
+            cd dist/dmg-mount
+            shasum -a 256 -c SHA256SUMS.txt
+            test -f "Install KiKi Models.command"
+          )
+
+          hdiutil detach dist/dmg-mount
+
+          cd dist
+          shasum -a 256 KiKi-v0.7.2-macos-installer.dmg \
+            > KiKi-v0.7.2-macos-installer.dmg.sha256
+
+      - name: Upload macOS DMG separately
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KiKi-v0.7.2-macos-DMG
+          if-no-files-found: error
+          path: |
+            kiki-layout-optimizer/dist/KiKi-v0.7.2-macos-installer.dmg
+            kiki-layout-optimizer/dist/KiKi-v0.7.2-macos-installer.dmg.sha256
+
