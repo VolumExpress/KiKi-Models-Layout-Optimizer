@@ -83,3 +83,75 @@ jobs:
           path: |
             kiki-layout-optimizer/dist/KiKi-v0.7.2-Windows-Setup.exe
             kiki-layout-optimizer/dist/KiKi-v0.7.2-Windows-Setup.exe.sha256
+      - name: Build macOS DMG installer
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="dist/KiKi-DMG-Contents"
+          mkdir -p "$STAGE"
+          ditto dist/portable "$STAGE"
+
+          cat > "$STAGE/Install KiKi Models.command" <<'EOF'
+          #!/bin/bash
+          ROOT="$(cd "$(dirname "$0")" && pwd)"
+          /bin/bash "$ROOT/installers/macos/install.command"
+          RESULT=$?
+          echo "Installer exit code: $RESULT"
+          read -r -p "Press Return to close..." _
+          exit "$RESULT"
+          EOF
+          chmod +x "$STAGE/Install KiKi Models.command"
+
+          cat > "$STAGE/START_HERE.txt" <<'EOF'
+          KiKi Models Layout Optimizer v0.7.2 Beta
+
+          Open "Install KiKi Models.command" in Finder.
+          Inspect installers/macos/install.command before installing.
+          Restart Adobe Illustrator after installation.
+
+          This unsigned beta is not notarized by Apple.
+          Native Illustrator integration on macOS is untested.
+
+          Откройте Install KiKi Models.command в Finder.
+          Перед установкой проверьте исходный скрипт.
+          Перезапустите Illustrator после установки.
+
+          Сборка не подписана и не проверена в Illustrator на macOS.
+          EOF
+
+          hdiutil create -ov \
+            -volname "KiKi Models v0.7.2 Beta" \
+            -srcfolder "$STAGE" \
+            -format UDZO \
+            dist/KiKi-v0.7.2-macos-installer.dmg
+
+          hdiutil verify dist/KiKi-v0.7.2-macos-installer.dmg
+
+          mkdir -p dist/dmg-mount
+          hdiutil attach -readonly -nobrowse \
+            -mountpoint dist/dmg-mount \
+            dist/KiKi-v0.7.2-macos-installer.dmg
+
+          (
+            cd dist/dmg-mount
+            shasum -a 256 -c SHA256SUMS.txt
+            test -f "Install KiKi Models.command"
+          )
+
+          hdiutil detach dist/dmg-mount
+
+          cd dist
+          shasum -a 256 KiKi-v0.7.2-macos-installer.dmg \
+            > KiKi-v0.7.2-macos-installer.dmg.sha256
+
+      - name: Upload macOS DMG separately
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KiKi-v0.7.2-macos-DMG
+          if-no-files-found: error
+          path: |
+            kiki-layout-optimizer/dist/KiKi-v0.7.2-macos-installer.dmg
+            kiki-layout-optimizer/dist/KiKi-v0.7.2-macos-installer.dmg.sha256
+
