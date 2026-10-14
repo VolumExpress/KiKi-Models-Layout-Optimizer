@@ -37,15 +37,15 @@ jobs:
       - name: Collect exact runtime license texts
         run: python packaging/collect_licenses.py
       - name: Build bundled Python worker on native OS
-        run: pyinstaller --noconfirm --clean --onefile --name kiki-worker --paths src packaging/worker_entry.py
+        run: pyinstaller --noconfirm --clean --onedir --contents-directory _internal --name kiki-worker --paths src packaging/worker_entry.py
       - name: Sanity test executable
         shell: bash
         run: |
-          if [[ "${{ matrix.platform }}" == windows ]]; then dist/kiki-worker.exe --help; else dist/kiki-worker --help; fi
+          if [[ "${{ matrix.platform }}" == windows ]]; then dist/kiki-worker/kiki-worker.exe --help; else dist/kiki-worker/kiki-worker --help; fi
       - name: Assemble portable archive
         shell: bash
         run: |
-          if [[ "${{ matrix.platform }}" == windows ]]; then python packaging/build_portable.py --worker dist/kiki-worker.exe --os windows --output dist/portable; else python packaging/build_portable.py --worker dist/kiki-worker --os macos --output dist/portable; fi
+          if [[ "${{ matrix.platform }}" == windows ]]; then python packaging/build_portable.py --worker dist/kiki-worker/kiki-worker.exe --os windows --output dist/portable; else python packaging/build_portable.py --worker dist/kiki-worker/kiki-worker --os macos --output dist/portable; fi
       - name: Verify portable payload (hashes + contents)
         run: python packaging/verify_payload.py dist/portable
       - name: Compute an actual layout with the frozen worker

@@ -92,3 +92,5 @@ Per-document `workspace/<name>/input_copy.json`, `result_test.json`, `preview_te
 ## Third-party licenses
 
 KiKi project code is MIT licensed. Windows/macOS packaged distributions include `THIRD_PARTY_NOTICES.md` and `third_party_licenses/` with full license texts and exact build versions for Python, Shapely, NumPy and GEOS. Before public binary distribution, separately assess GEOS LGPL-2.1 corresponding-source and replacement/relinking requirements; the CI license manifest is not proof of legal compliance.
+
+**Binary packaging:** the executable and support libraries use PyInstaller `--onedir`, with GEOS shared libraries visible in `runtime/_internal/` and checksummed in `GEOS_FILES.json`. An actual ABI-compatible GEOS replacement test and LGPL-2.1 compliance review remain required before public binary redistribution. See [third-party notices](THIRD_PARTY_NOTICES.md).

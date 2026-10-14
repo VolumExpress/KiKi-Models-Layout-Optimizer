@@ -26,6 +26,29 @@ GEOS распространяется по LGPL. Наличие текста LGP
 
 **Binary release gate / Условие публичного выпуска:** the GEOS LGPL compliance review must be completed independently of passing CI. Until then, built artifacts are technical release candidates, not legal clearance to distribute. / До отдельной проверки условий LGPL бинарники считаются техническими кандидатами на выпуск.
 
+## GEOS onedir distribution / Распространение GEOS с onedir
+
+The binary builder uses PyInstaller `--onedir` rather than `--onefile`.
+GEOS shared libraries are separately visible under `runtime/_internal/`, and
+`GEOS_FILES.json` lists their exact relative paths and SHA-256 digests. The
+portable archive checksums cover them, as do the Windows Setup and macOS DMG
+(both are built around the same portable payload).
+
+Сборка размещает динамические библиотеки GEOS отдельными файлами в
+`runtime/_internal/`; имена и контрольные суммы записаны в `GEOS_FILES.json`.
+Пользователю не нужен установленный Python. Заменить библиотеку для
+эксперимента можно в копии установленного приложения, соблюдая совместимость
+ABI. Такая возможность **должна быть реально проверена на Windows/macOS**.
+
+Technical replacement procedure: [RU](docs/ru/GEOS-DISTRIBUTION.md) / [EN](docs/en/GEOS-DISTRIBUTION.md).
+
+**Release gate:** the physical presence of replaceable shared libraries alone
+is NOT legal confirmation of compliance with LGPL-2.1 §6. Review the
+application's actual loader behavior with a modified ABI-compatible GEOS,
+applicable source-code distribution obligations, and all notices before
+publishing binaries. See the upstream license at
+https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html .
+
 ## Build-only tooling / Инструменты сборки
 
 - **PyInstaller**: GPL-2.0-or-later with the project's bootloader exception, permitting distribution of bundled applications under the application's license, subject to third-party dependency obligations. The PyInstaller development tool itself is not distributed with the KiKi source archive as part of the executable distribution. See https://pyinstaller.org/en/stable/license.html .

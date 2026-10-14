@@ -16,6 +16,8 @@ def smoke(payload: Path) -> None:
     worker=payload/'runtime'/('kiki-worker.exe' if sys.platform=='win32' else 'kiki-worker')
     if not worker.is_file():
         raise FileNotFoundError(worker)
+    if not (worker.parent/'_internal').is_dir():
+        raise RuntimeError('Not a PyInstaller onedir worker: runtime/_internal missing')
     # Place synthetic input inside a real workspace structure; never ship it as user content.
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp)
