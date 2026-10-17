@@ -658,6 +658,54 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
     Best-so-far can be checkpointed through on_best after every full validation.
     No guarantee of a global optimum or improvement in every individual metric.
     """
+    if type(adaptive_gap) is not bool or type(strict_family) is not bool:
+        raise ValueError("Adaptive and strict family policy flags must be booleans")
+    if adaptive_gap:
+        from .gap_policy import optimize_gap
+        wanted = float(kwargs.get("gap", 0.8))
+        is_family = kwargs.get("family_layout") == "family_first"
+
+        def candidate_solver(candidate_gap, discovery):
+            opts = dict(kwargs, gap=candidate_gap)
+            # Speculative layouts must never become applicable checkpoints.
+            return layout(data, trials=1 if discovery else trials,
+                time_budget_sec=0 if discovery else time_budget_sec,
+                seed=seed, contour_anchors=contour_anchors,
+                advanced_geometry=advanced_geometry, advanced_search=advanced_search,
+                objective_weights=objective_weights, guided_objectives=guided_objectives,
+                cut_common_line_audit=cut_common_line_audit, adaptive_gap=False,
+                strict_family=is_family, on_best=None, on_trial=None,
+                progress=progress if not discovery else None, **opts)
+
+        found, achieved, adjustment = optimize_gap(
+            wanted, candidate_solver, PackingFailure,
+            seconds=float(time_budget_sec), progress=progress)
+        if found is None:
+            # If not even a reduced rigid-family layout is available, preserve
+            # the existing labelled compact fallback at the REQUESTED gap.
+            result, shapes = layout(data, trials=trials,
+                time_budget_sec=time_budget_sec, seed=seed,
+                contour_anchors=contour_anchors, advanced_geometry=advanced_geometry,
+                advanced_search=advanced_search, objective_weights=objective_weights,
+                guided_objectives=guided_objectives,
+                cut_common_line_audit=cut_common_line_audit, adaptive_gap=False,
+                strict_family=False, on_best=None, on_trial=None, progress=None,
+                **kwargs)
+            adjustment.update({"used_mm": float(result["settings"]["gap_mm"]),
+                               "reduced": False, "family_fallback": is_family})
+        else:
+            result, shapes = found
+        result["report"]["gap_adjustment"] = adjustment
+        result["settings"]["requested_gap_mm"] = wanted
+        if adjustment.get("reduced"):
+            actual = adjustment["used_mm"]
+            result["report"]["warnings"].append(
+                f"Requested gap {wanted:.3f} mm could not be achieved in the chosen "
+                f"layout; verified result uses {actual:.3f} mm. Review before applying.")
+        if on_best:
+            on_best(result, shapes)
+        return result, shapes
+
     if isinstance(trials,bool) or not isinstance(trials,int) or not 1 <= trials <= 30:
         raise ValueError("trials must be an integer from 1 to 30")
     if isinstance(seed,bool) or not isinstance(seed,int) or not -2**31 <= seed <= 2**31-1:
