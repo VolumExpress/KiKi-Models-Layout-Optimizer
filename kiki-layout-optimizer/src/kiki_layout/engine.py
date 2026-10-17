@@ -127,7 +127,10 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
            rotations=(0,), families="off", family_threshold=0.97, outline_aware=False,
            width=None, height=None, refine=True, progress=None,
            operation="engrave", kerf_mm=0.0, constraints=None,
-           order_strategy="baseline", random_seed=42, contour_anchors=False, candidate_policy="default", advanced_geometry=False, advanced_search=False, search_weights=None, family_layout="compact", family_width_fraction=0.55, family_packing_strategy="shelf"):
+           order_strategy="baseline", random_seed=42, contour_anchors=False, candidate_policy="default", advanced_geometry=False, advanced_search=False, search_weights=None, family_layout="compact", family_width_fraction=0.55, family_packing_strategy="shelf", semantic_map=None):
+    if semantic_map is not None and (family_layout != "family_first" or mode == "ordered"
+            or flow != "rows" or tuple(rotations) != (0,)):
+        raise ValueError("Semantic numbering requires Uniform/Dense + Family First + Rows + 0-degree rotations")
     if family_layout not in ("compact", "family_first"):
         raise ValueError("family_layout must be compact or family_first")
     if family_packing_strategy not in ("shelf", "maxrects"):
@@ -228,6 +231,12 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
     if family_layout == "family_first":
         from .family_layout import sort_family_units
         units=sort_family_units(units,shapes,strategy=order_strategy,seed=random_seed)
+    semantic_audit = None
+    if semantic_map is not None:
+        from .semantic_order import sort_semantic_units
+        units, semantic_audit = sort_semantic_units(
+            units, objects, semantic_map, data.get("document_name"))
+        warnings.extend(semantic_audit["warnings"])
     if mode == "ordered":
         # Stable order based on original user selection (first family occurrence).
         order={str(ob["id"]):i for i,ob in enumerate(objects)}
@@ -605,6 +614,8 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
                 "right":round(width-xmax,5),"bottom":round(height-ymax,5)},
             "travel_proxy":laser_plan["summary"],
             "warnings":warnings+(["CUTTING BETA: kerf-aware separation only; no common-line merging, inner-before-outer CAM, tabs or toolpath. Never cut straight from this preview."] if operation == "cut" else [])+["Polyline-based contour approximation; inspect native Illustrator geometry before fabrication.", "Laser jumps are CENTROID-PROXY estimates, not controller toolpaths or time savings."]}
+    if semantic_audit is not None:
+        report['semantic_order'] = semantic_audit
     if geometry_audit is not None:
         report['advanced_geometry']=geometry_audit
     if search_audit is not None:
@@ -664,6 +675,7 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
         from .gap_policy import optimize_gap
         wanted = float(kwargs.get("gap", 0.8))
         is_family = kwargs.get("family_layout") == "family_first"
+        is_semantic = kwargs.get("semantic_map") is not None
 
         def candidate_solver(candidate_gap, discovery):
             opts = dict(kwargs, gap=candidate_gap)
@@ -681,6 +693,8 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
             wanted, candidate_solver, PackingFailure,
             seconds=float(time_budget_sec), progress=progress)
         if found is None:
+            if is_semantic:
+                raise PackingFailure("Semantic order could not fit even after verified gap search; no unsorted fallback is allowed")
             # If not even a reduced rigid-family layout is available, preserve
             # the existing labelled compact fallback at the REQUESTED gap.
             result, shapes = layout(data, trials=trials,
@@ -746,6 +760,8 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
         try:
             return _layout_once(data, **call_options)
         except PackingFailure as exc:
+            if call_options.get('semantic_map') is not None:
+                raise  # semantic order may not silently degrade to MaxRects or Compact
             if call_options.get('family_layout') != 'family_first':
                 raise
             # A failed shelf pack is not proof of insufficient plate space.
