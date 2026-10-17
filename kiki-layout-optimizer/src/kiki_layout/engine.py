@@ -204,15 +204,20 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
     for ob in objects:
         oid=str(ob['id']);family_entries.setdefault(labels[oid],[]).append(oid)
     family_audit=[]
+    family_catalog=[]
+    object_by_id={str(ob['id']): ob for ob in objects}
     for label,group_ids in family_entries.items():
-        if len(group_ids)<2: continue
         members=[]
         for oid in group_ids:
             shape=shapes[oid]; x0,y0,x1,y1=shape.bounds
-            ob=next(v for v in objects if str(v['id'])==oid)
-            members.append({'id':oid,'name':ob.get('name',''),
+            ob=object_by_id[oid]
+            members.append({'id':oid,'uuid':str(ob.get('uuid','')),
+                'name':ob.get('name',''),
                 'equivalent_mm':round(math.sqrt((x1-x0)*(y1-y0)),2)})
-        family_audit.append({'label':label,'members':members})
+        entry={'label':label,'members':members}
+        family_catalog.append(entry)
+        if len(group_ids)>=2:
+            family_audit.append(entry)
     # Alternative family wraps are explored by multi-start without resizing any emblem.
     # The compact legacy algorithm retains its exact previous group width.
     width_fraction=family_width_fraction if family_layout=="family_first" else 0.55
@@ -593,6 +598,7 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
                            order=travel_order, start=(left,top), long_jump_mm=long_jump_mm)
     report={"object_count":len(ids),"cluster_count":len(units),
             "family_audit":family_audit,
+            "family_catalog":family_catalog,
             "family_layout": {"mode":family_layout,"shelf_fallbacks":shelf_fallbacks,
                               "unit_width_fraction":round(width_fraction,3),
                               "packing_strategy":family_packing_strategy if family_layout=="family_first" else "legacy",
