@@ -694,7 +694,9 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
         def candidate_solver(candidate_gap, discovery):
             opts = dict(kwargs, gap=candidate_gap)
             # Speculative layouts must never become applicable checkpoints.
-            return layout(data, trials=1 if discovery else trials,
+            # Lower-gap search uses up to three varied attempts, not just a
+            # single greedy shelf, to avoid underestimating feasible clearance.
+            return layout(data, trials=min(trials, 3) if discovery else trials,
                 time_budget_sec=0 if discovery else time_budget_sec,
                 seed=seed, contour_anchors=contour_anchors,
                 advanced_geometry=advanced_geometry, advanced_search=advanced_search,
