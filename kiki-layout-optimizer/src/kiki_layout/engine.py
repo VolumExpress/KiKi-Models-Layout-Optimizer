@@ -9,7 +9,7 @@ import statistics
 import random
 import time
 from shapely.affinity import rotate, translate
-from .geometry import get_shapes
+from .geometry import get_shapes, duplicate_point_ring_audit
 from .families import detect_families, build_units
 from .constraints import validate_constraints, source_centre_mm
 
@@ -185,6 +185,13 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
             raise ValueError(f'Object {oid}: no rotation allowed by both global and individual settings')
         allowed[oid]=angles
     labels,warnings=detect_families(objects,shapes,families,family_threshold,outline_aware=outline_aware)
+    degenerate_audit=duplicate_point_ring_audit(data)
+    if degenerate_audit:
+        ids=", ".join(sorted(set(entry["object_id"] for entry in degenerate_audit)))
+        warnings.append(
+            f"Skipped {len(degenerate_audit)} geometrically empty identical-point "
+            f"compound rings in objects {ids}; original Illustrator artwork untouched. "
+            f"Inspect these objects before production.")
     # Locked objects are anchored independently and must never become movable
     # members of a detected family. A family with incompatible rotations is
     # broken into independent islands rather than silently violating a rule.
@@ -599,6 +606,7 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
     report={"object_count":len(ids),"cluster_count":len(units),
             "family_audit":family_audit,
             "family_catalog":family_catalog,
+            "ignored_zero_area_rings":degenerate_audit,
             "family_layout": {"mode":family_layout,"shelf_fallbacks":shelf_fallbacks,
                               "unit_width_fraction":round(width_fraction,3),
                               "packing_strategy":family_packing_strategy if family_layout=="family_first" else "legacy",
