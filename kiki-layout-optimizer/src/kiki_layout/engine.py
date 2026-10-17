@@ -122,9 +122,11 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
            rotations=(0,), families="off", family_threshold=0.97, outline_aware=False,
            width=None, height=None, refine=True, progress=None,
            operation="engrave", kerf_mm=0.0, constraints=None,
-           order_strategy="baseline", random_seed=42, contour_anchors=False, candidate_policy="default", advanced_geometry=False, advanced_search=False, search_weights=None, family_layout="compact", family_width_fraction=0.55):
+           order_strategy="baseline", random_seed=42, contour_anchors=False, candidate_policy="default", advanced_geometry=False, advanced_search=False, search_weights=None, family_layout="compact", family_width_fraction=0.55, family_packing_strategy="shelf"):
     if family_layout not in ("compact", "family_first"):
         raise ValueError("family_layout must be compact or family_first")
+    if family_packing_strategy not in ("shelf", "maxrects"):
+        raise ValueError("Unknown family packing strategy")
     if family_layout == "family_first" and mode == "ordered":
         raise ValueError("Family-first placement conflicts with strict Ordered mode")
     if operation not in ("engrave", "cut"):
@@ -262,12 +264,26 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
         placed.append(fixed_geometry)
         transforms.append([fx,fy,0])
     fixed_count=len(placed)
+    # If the greedy shelf strategy failed in a prior call, try a bounded
+    # MaxRects-style packing of intact, unrotated family units. This is only
+    # a rescue path: locked objects or 0-degree rotation restrictions keep
+    # their original solver and its existing safe fallback.
+    packed_families = None
+    if family_layout == "family_first" and family_packing_strategy == "maxrects":
+        if fixed_count or any(0 not in allowed[oid] for unit in units for oid in unit["ids"]):
+            raise ValueError("Cannot fit family with rigid-family packing constraints")
+        from .family_pack import pack_family_units
+        packed_families = pack_family_units(units, width, height, margins, gap, seed=random_seed)
+        if packed_families is None:
+            raise ValueError("Cannot fit family with rectangle-based rescue packing")
+        placed = [p[0] for p in packed_families]
+        transforms = [[p[1],p[2],p[3]] for p in packed_families]
     shelf_cursor=(left,top,0.)
     previous_style=None
     shelf_fallbacks=0
     units=fixed_units+units
     update("placing", 0, len(units)-fixed_count)
-    for unit_index, unit in enumerate(units[fixed_count:]):
+    for unit_index, unit in enumerate([] if packed_families is not None else units[fixed_count:]):
         best=None
         permitted=set(allowed[unit['ids'][0]])
         for oid in unit['ids'][1:]: permitted.intersection_update(allowed[oid])
@@ -565,6 +581,7 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
             "family_audit":family_audit,
             "family_layout": {"mode":family_layout,"shelf_fallbacks":shelf_fallbacks,
                               "unit_width_fraction":round(width_fraction,3),
+                              "packing_strategy":family_packing_strategy if family_layout=="family_first" else "legacy",
                               "description":"Visual-style ordered rigid families on compact shelves" if family_layout=="family_first" else "Legacy compact geometry"},
             "pair_count":len(pairwise),
             "locked_count":len(locked_ids),
@@ -678,6 +695,19 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
             if (call_options.get('family_layout') != 'family_first'
                     or 'Cannot fit family' not in str(exc)):
                 raise
+            # A failed shelf pack is not proof of insufficient plate space.
+            # Try conservative rigid-family rectangular nesting before
+            # dropping the user-requested ordered-family preference.
+            rescued_options = dict(call_options, family_packing_strategy="maxrects")
+            try:
+                rescued, rescued_shapes = _layout_once(data, **rescued_options)
+                rescued["report"]["family_layout"]["shelf_failure_reason"] = str(exc)
+                rescued["report"]["warnings"].append(
+                    "Family-first shelf placement failed; bounded rectangle packing "
+                    "kept every family intact. Visual section order may differ; review preview.")
+                return rescued, rescued_shapes
+            except ValueError:
+                pass
             # Family-first is an aesthetic preference, never a reason to lose
             # an otherwise possible, fully validated layout. Make the fallback
             # transparent to the user; NEVER claim the result is family-first.
