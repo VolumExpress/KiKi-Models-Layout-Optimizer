@@ -48,7 +48,7 @@ def test_multi_start_prefers_successful_family_ordering_over_compact_score(monke
     def constructed(source, **options):
         if options.get('family_layout') == 'family_first':
             if options.get('order_strategy') in ('baseline', 'perimeter'):
-                raise ValueError('Cannot fit family synthetic onto plate with gap 1 mm')
+                raise engine.PackingFailure('Cannot fit family synthetic onto plate with gap 1 mm')
             result, shapes = original(source, **options)
             # A valid family-first layout can have an objectively worse
             # occupied footprint than compact: user preference wins.
