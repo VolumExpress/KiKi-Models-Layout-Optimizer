@@ -23,13 +23,13 @@
       if (den < 0.00001) return Math.sqrt(Math.pow(p[0]-a[0],2)+Math.pow(p[1]-a[1],2));
       return Math.abs((p[0]-a[0])*dy-(p[1]-a[1])*dx)/den;
     }
-    function flatten(p0,p1,p2,p3,out,depth) {
-      if (depth >= 12 || Math.max(nearLine(p1,p0,p3),nearLine(p2,p0,p3)) <= TOL_PT) {
+    function flatten(p0,p1,p2,p3,out,depth,minDepth) {
+      if (depth >= 12 || (depth >= minDepth && Math.max(nearLine(p1,p0,p3),nearLine(p2,p0,p3)) <= TOL_PT)) {
         out.push(p3); return;
       }
       var a=mid(p0,p1),b=mid(p1,p2),c=mid(p2,p3);
       var d=mid(a,b),e=mid(b,c),f=mid(d,e);
-      flatten(p0,a,d,f,out,depth+1); flatten(f,e,c,p3,out,depth+1);
+      flatten(p0,a,d,f,out,depth+1,minDepth); flatten(f,e,c,p3,out,depth+1,minDepth);
     }
     function toLocal(p,centre) { return [(p[0]-centre[0])*MM,(centre[1]-p[1])*MM]; }
     function describe(item) {
@@ -41,9 +41,11 @@
       if (n < 2) throw Error(kikiT('bad_path'));
       var out=[toLocal(anchors[0].anchor,centre)];
       var count=path.closed ? n : n-1;
+      // Keep interior samples on two-anchor Bezier lenses and filled open arcs.
+      var minDepth=(n===2 && path.filled) ? 3 : 0;
       for (var j=0; j<count; j++) {
         var p=anchors[j],q=anchors[(j+1)%n],segment=[];
-        flatten(p.anchor,p.rightDirection,q.leftDirection,q.anchor,segment,0);
+        flatten(p.anchor,p.rightDirection,q.leftDirection,q.anchor,segment,0,minDepth);
         for (var k=0; k<segment.length; k++) {
           if (path.closed && j===n-1 && k===segment.length-1) continue;
           out.push(toLocal(segment[k],centre));
