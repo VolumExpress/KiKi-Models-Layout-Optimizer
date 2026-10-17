@@ -47,6 +47,9 @@ details{font-size:11px;background:#30363c;padding:5px 7px;border-radius:4px;marg
  <div class="fineprint" data-i18n="adaptiveGapNote">Будет найден наибольший проверенный зазор в рамках поиска. Перед применением потребуется подтверждение.</div>
  <div class="fields"><div class="field wide"><label for="familyLayout" data-i18n="familyLayout">Организация семейств</label>
  <select id="familyLayout"><option value="compact">Компактная укладка</option><option value="family_first">Упорядоченные семейства</option></select></div></div>
+ <label class="checkline"><input type="checkbox" id="semanticOrder" style="width:auto"> <span data-i18n="semanticOrderLabel">Смысловой порядок цифр (P11, требуется таблица соответствий)</span></label>
+ <div class="fineprint" data-i18n="semanticOrderNote">Файл semantic_order.json должен находиться в папке экспорта пластины. Сначала римские числа, затем готические; непроверенные номиналы выделяются в отчёте. Режим требует «Упорядоченные семейства», «Рядами», поворот 0°.</div>
+ <div id="semanticNotice" class="hidden" role="alert" style="margin:5px 0;padding:7px;border-left:3px solid #ffca7b;background:#423c2e;color:#ffdfae"></div>
  <label class="checkline"><input type="checkbox" id="outlineAware" style="width:auto"> <span data-i18n="outlineAware">Учитывать толщину контуров при поиске похожих серий (эксперимент)</span></label>
  <div class="fineprint" id="outlineMatchContext" data-i18n="outlineMatchContext">Доступно при группировке «По силуэту».</div>
  <details><summary data-i18n="familyLayoutHelp">Чем отличаются варианты?</summary><p data-i18n="familyLayoutNote">Компактно — меньше используемая площадь. Упорядоченно — серии разных размеров располагаются вместе, но занимают больше места. Это не улучшение распознавания фигур.</p>
