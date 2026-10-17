@@ -5,7 +5,7 @@
 'use strict';
 var root=window.KIKI_PROJECT_ROOT||'';
 var lang='ru', busy=false, child=null, currentInput='',lastFolder='',currentPreview='plate';
-var fs=null,path=null,spawn=null,BufferCtor=null,paretoTrial=null,currentGapAdjustment=null,currentSemanticAudit=null;
+var fs=null,path=null,spawn=null,BufferCtor=null,paretoTrial=null,currentGapAdjustment=null,currentSemanticAudit=null,currentFamilyCatalog=[],familyPlan=[];
 var $=function(id){return document.getElementById(id);};
 var translations={
 ru:{outlineMatchContext:'Дополнительное сопоставление работает только при группировке «По силуэту».',workflowHelp:'Быстрый старт',workflowDescription:'Выделите эмблемы на холсте Illustrator → экспортируйте → выберите настройки → рассчитайте → проверьте результат → примените. После правки контуров экспортируйте повторно. Работайте с копией .ai.',operationHelp:'Как выбрать технологию?',operationDescription:'Гравировка — расположение изображений с заданным зазором. Резка — разнос отдельных деталей с учётом ширины пропила; это не готовая программа станка.',rotationHelp:'Какие повороты безопасны?',rotationDescription:'0° сохраняет ориентацию. При 90° или 180° цифры, стрелки и направленные эмблемы могут изменить смысл. Для отдельных объектов задавайте свои ограничения ниже.',clearanceHelp:'Что означают зазор и поля?',clearanceDescription:'Зазор — минимальная дистанция между отдельными эмблемами; поля — отступ до краёв пластины. Для резки дополнительно учитывается ширина пропила. Единицы — мм.',rulesHelp:'Как закреплять объекты?',rulesDescription:'Экспортируйте всю пластину, затем выделите нужные эмблемы в Illustrator, задайте фиксацию или повороты и сохраните ограничения. После изменения самих контуров выполните новый экспорт.',presetHelp:'Что сохраняет пресет?',presetDescription:'Пресет содержит режим, интервалы, поля, углы и параметры поиска, но не изображения и не правила фиксации отдельных объектов.',familyReviewNote:'Здесь показано, какие объекты распознаны как одно семейство. Упорядоченная раскладка может выглядеть иначе при совершенно том же составе семейств.',showFamilyIds:'Показать технические ID и исходные имена',compactExample:'Компактно',compactExampleNote:'Приоритет плотности',orderedExample:'Сериями',orderedExampleNote:'Приоритет порядка размеров',guidedObjectives:'Эксперимент: веса управляют поиском позиций (может ухудшить результат)',paretoTitle:'Другие допустимые варианты',paretoNote:'Другие проверенные варианты отличаются плотностью и равномерностью. Только просмотр: применить можно лишь итоговую раскладку, выбранную расчётом.',paretoShow:'Показать альтернативу',objectivePreset:'Готовый профиль',multiTitle:'Приоритеты раскладки',multiEnabled:'Выбирать лучший по трём критериям',areaWeight:'Плотность (0–10)',spacingWeight:'Равномерность (0–10)',travelWeight:'Переходы (0–10)',multiNote:'По умолчанию веса выбирают лучший из рассчитанных вариантов. Влияние весов на сам поиск включается отдельно и остаётся экспериментальным. Переходы — оценка, не время станка.',commonLineLabel:'Аудит совпадающих линий в исходном макете',commonLineNote:'Только диагностика: не объединяет контуры и не создаёт маршрут резки. Требуется проверка в CAM.',subtitle:'Оптимизация раскладки',export:'Экспорт выделения',calculate:'Рассчитать',apply:'Применить',
@@ -18,7 +18,7 @@ ready:'Готово. Экспортируйте выделенные эмбле�
 noInput:'Сначала экспортируйте выделение из Illustrator.',started:'Расчёт запущен',finished:'Раскладка рассчитана. Проверьте предпросмотр и примените в Illustrator.',failed:'Ошибка',cancelled:'Расчёт отменён; старый результат недействителен.',
 noDoc:'Документ не выбран',lastExport:'Последний экспорт',exported:'Экспортирован файл',applied:'Применено. Для нового расчёта экспортируйте документ повторно.',presetPlaceholder:'Выберите пресет…',presetPrompt:'Имя нового пресета',noPreset:'Сначала выберите пресет',saved:'Пресет сохранён',loaded:'Пресет загружен',
 showBest:'Посмотреть лучший промежуточный вариант',searchHelp:'Дополнительные методы поиска',advancedSearchLabel:'Локальная перепаковка групп (эксперимент)',advancedSearchNote:'Перепаковка 2–3 логических блоков, точная проверка расстояний, откат при отсутствии улучшения.',advancedGeometryLabel:'Поиск для сложных контуров (эксперимент)',advancedGeometryNote:'Дополнительный поиск мест для фигур с выемками, отверстиями и несколькими частями. На слишком сложных контурах используется обычный поиск; улучшение не гарантируется.',trialsLabel:'Попыток раскладки',timeBudgetLabel:'Бюджет времени, с',seedLabel:'Код повторения расчёта',contourAnchorsLabel:'Дополнительные опорные точки (эксперимент)',searchNote:'Выбирается лучший проверенный вариант. Бюджет мягкий: уже начатая попытка завершается полностью.',ruleSaved:'Ограничения сохранены. Предыдущая раскладка сброшена.',docs:'Не удалось запустить вычислитель. Запустите install_windows.bat / install_macos.command.',running:'Идёт оптимизация…',stages:{gap_search:'Подбор допустимого зазора',searching:'Многократный поиск',preparing:'Чтение геометрии',placing:'Размещение объектов',refining:'Выравнивание интервалов',compacting:'Геометрическое доуплотнение',validating:'Геометрическая проверка',complete:'Завершение'},
-choices:{mode:['Равномерно','Плотно','По порядку'],familyLayout:['Компактная укладка','Упорядоченные семейства'],objectivePreset:['Баланс','Плотность','Равномерность','Переходы','Свой'],operation:['Гравировка','Резка'],families:['По коду символа','По силуэту','Без группировки'],flow:['Свободно','Рядами','Столбцами'],travel:['Ближайший','По рядам','По столбцам','Исходный'],ruleRotation:['Общие настройки','Только 0°','0°/180°','Все четыре угла']},
+choices:{mode:['Равномерно','Плотно','По порядку'],familyLayout:['Компактная укладка','Упорядоченные семейства','Смысловой порядок · редактор'],objectivePreset:['Баланс','Плотность','Равномерность','Переходы','Свой'],operation:['Гравировка','Резка'],families:['По коду символа','По силуэту','Без группировки'],flow:['Свободно','Рядами','Столбцами'],travel:['Ближайший','По рядам','По столбцам','Исходный'],ruleRotation:['Общие настройки','Только 0°','0°/180°','Все четыре угла']},
 },
 en:{outlineMatchContext:'Extra outline matching requires grouping by silhouette.',workflowHelp:'Quick start',workflowDescription:'Select artwork in Illustrator → Export → choose settings → Optimize → inspect preview → Apply. Re-export after editing artwork and work on a copy of your .ai file.',operationHelp:'Engraving or cutting?',operationDescription:'Engraving spaces symbols by a specified clearance. Cutting allows for the kerf between separate parts; no machine-ready toolpaths are produced.',rotationHelp:'Which rotations are safe?',rotationDescription:'0° preserves orientation. Rotating numbers, arrows or directional emblems by 90°/180° can change their meaning. Use per-object limits below.',clearanceHelp:'What are clearance and margins?',clearanceDescription:'Clearance is the minimum distance between separate symbols; margins are distances to the plate edges. Cutting also accounts for kerf. Units: mm.',rulesHelp:'How do I lock artwork?',rulesDescription:'Export the whole plate, then select individual objects in Illustrator, assign position locks or rotations and save. Re-export if the source contours change.',presetHelp:'What is saved in a preset?',presetDescription:'A preset saves mode, clearances, margins, rotations and search options, not artwork or per-object locking rules.',familyReviewNote:'This lists recognized families. Ordered family placement can look different even when family memberships remain identical.',showFamilyIds:'Show technical IDs and original names',compactExample:'Compact',compactExampleNote:'Prioritizes density',orderedExample:'By families',orderedExampleNote:'Prioritizes size order',guidedObjectives:'EXPERIMENTAL: weights guide placement (may regress quality)',paretoTitle:'Other valid layouts',paretoNote:'Other validated variants trade off density and spacing. Preview only; only the selected final layout can be applied.',paretoShow:'Preview alternative',objectivePreset:'Quick preset',multiTitle:'Layout priorities',multiEnabled:'Choose best by three objectives',areaWeight:'Compactness (0–10)',spacingWeight:'Gap uniformity (0–10)',travelWeight:'Travel proxy (0–10)',multiNote:'By default weights only rank calculated trials. Guiding candidate placement is a separate experimental option. Travel is a proxy, not machining time.',commonLineLabel:'Inspect coincident edges in original artwork',commonLineNote:'Inspection only; does not merge cuts or generate CAM. Verify manufacturing geometry.',subtitle:'2D layout optimization',export:'Export selection',calculate:'Optimize',apply:'Apply',
 operation:'Process',mode:'Layout objective',modeHelp:'What do the modes mean?',modeDescription:'Dense reduces occupied area; Uniform prioritizes consistent neighbouring gaps; Ordered uses selection order, not original positions. Family layout independently controls whether size series stay together.',
@@ -30,7 +30,7 @@ ready:'Ready. Export selected artwork.',processing:'Waiting for Illustrator…',
 noInput:'Export artwork from Illustrator first.',started:'Optimization started',finished:'Layout calculated. Inspect preview and apply in Illustrator.',failed:'Error',cancelled:'Optimization cancelled; previous result invalidated.',
 noDoc:'No document selected',lastExport:'Latest export',exported:'Exported',applied:'Applied. Re-export artwork before another calculation.',presetPlaceholder:'Choose a preset…',presetPrompt:'New preset name',noPreset:'Select a preset first',saved:'Preset saved',loaded:'Preset loaded',
 showBest:'View best-so-far preview',searchHelp:'Additional search methods',advancedSearchLabel:'Local group repacking (experimental)',advancedSearchNote:'Repack 2–3 logical blocks, validate full contour clearances, roll back without improvement.',advancedGeometryLabel:'Complex-contour placement (experimental)',advancedGeometryNote:'Extra placements for concave, holed and multipart shapes. Complex contours fall back to the regular search; improvement is not guaranteed.',trialsLabel:'Packing attempts',timeBudgetLabel:'Time budget, sec',seedLabel:'Repeatability seed',contourAnchorsLabel:'Additional anchor positions (experimental)',searchNote:'Select best verified solution. Soft deadline: a started trial must finish.',ruleSaved:'Constraints saved. Previous calculation invalidated.',docs:'Optimizer not installed. Run install_windows.bat / install_macos.command.',running:'Optimizing…',stages:{gap_search:'Searching for verified clearance',searching:'Multistart search',preparing:'Reading geometry',placing:'Placing objects',refining:'Refining clearances',compacting:'Local geometric repacking',validating:'Validating geometry',complete:'Finishing'},
-choices:{mode:['Uniform','Dense','Ordered'],familyLayout:['Compact','Ordered families'],objectivePreset:['Balanced','Compact','Uniform','Travel','Custom'],operation:['Engraving','Cutting'],families:['By symbol code','By silhouette','No grouping'],flow:['Free','Rows','Columns'],travel:['Nearest','Rows','Columns','Source order'],ruleRotation:['Global settings','0° only','0°/180°','All four angles']},
+choices:{mode:['Uniform','Dense','Ordered'],familyLayout:['Compact','Ordered families','Semantic order · editor'],objectivePreset:['Balanced','Compact','Uniform','Travel','Custom'],operation:['Engraving','Cutting'],families:['By symbol code','By silhouette','No grouping'],flow:['Free','Rows','Columns'],travel:['Nearest','Rows','Columns','Source order'],ruleRotation:['Global settings','0° only','0°/180°','All four angles']},
 }}
 var i18nIds=['outlineMatchContext','workflowHelp','workflowDescription','operationHelp','operationDescription','rotationHelp','rotationDescription','clearanceHelp','clearanceDescription','rulesHelp','rulesDescription','presetHelp','presetDescription','familyReviewNote','showFamilyIds','compactExample','compactExampleNote','orderedExample','orderedExampleNote','outlineAware','familyLayout','familyLayoutHelp','familyLayoutNote','semanticOrderLabel','semanticOrderNote','adaptiveGapLabel','adaptiveGapNote','guidedObjectives','paretoTitle','paretoNote','paretoShow','objectivePreset','multiTitle','multiEnabled','areaWeight','spacingWeight','travelWeight','multiNote','commonLineLabel','commonLineNote','showBest','searchHelp','trialsLabel','timeBudgetLabel','seedLabel','contourAnchorsLabel','advancedGeometryLabel','advancedGeometryNote','advancedSearchLabel','advancedSearchNote','searchNote','subtitle','export','calculate','apply','operation','mode','modeHelp','modeDescription','kerf','families','rotation','familyHelp','familyDescription','flow','travel','travelHelp','travelDescription','gap','margins','familyReviewTitle','rulesTitle','lock','perRotation','saveRules','presetsTitle','refresh','load','savePreset','cancel','progressTitle','previewTitle','plate','route','noPreview','previewNote','logsTitle','languageAI'];
 var activeJob=null,logMessages=[],calcReady=false,currentFamilyAudit=[];
@@ -70,30 +70,51 @@ function invoke(action){if(busy)return;if(!root){status('Missing CEP project pat
 function invokeRules(){if(busy)return;busyOn(true);status(t('processing'));var args=[root,$('lockPosition').checked,$('ruleRotation').value].map(function(v){return JSON.stringify(v);});evalHost('kikiCepRules('+args.join(',')+')',function(r){busyOn(false);if(!r)return;if(r.status==='ok'){clearPreview();refreshRules();status(t('ruleSaved'));log('Constraints updated: '+r.detail);}else status(t('failed')+': '+(r.detail||r.status),true);});}
 function number(id){var s=String($(id).value).trim().replace(',','.');var n=Number(s);if(!s||!isFinite(n)||n<0||n>100)throw Error(id+': 0–100 mm');return n;}
 function integerOption(id,lo,hi){var raw=$(id).value.trim();if(!/^-?\d+$/.test(raw))throw Error(id+': integer required');var n=Number(raw);if(!Number.isSafeInteger(n)||n<lo||n>hi)throw Error(id+': '+lo+'–'+hi);return n;}
-function options(){if($('familyLayout').value==='family_first'&&$('mode').value==='ordered')throw Error(lang==='ru'?'Упорядоченные семейства несовместимы с режимом Ordered':'Ordered families cannot be combined with Ordered objective');var op=$('operation').value,kerf=op==='cut'?number('kerf'):0;if(op==='cut'&&kerf<=0)throw Error('Cutting requires kerf > 0');
+function hasReviewedSemanticIntent(row){
+ if(!row||row.status!=='confirmed')return false;
+ if(row.section==='roman'||row.section==='gothic')
+   return Number.isInteger(row.value)&&row.value>0&&row.value<=500;
+ if(row.section==='chapter'||row.section==='role'||row.section==='carrier')return true;
+ // Plain auto-generated "other" labels carry no semantic constraints.
+ // An explicit user edit and review are needed to enforce manual order.
+ return row.section==='other'&&row.edited===true;
+}
+function options(){if($('familyLayout').value!=='compact'&&$('mode').value==='ordered')throw Error(lang==='ru'?'Упорядоченные семейства несовместимы с режимом Ordered':'Ordered families cannot be combined with Ordered objective');var op=$('operation').value,kerf=op==='cut'?number('kerf'):0;if(op==='cut'&&kerf<=0)throw Error('Cutting requires kerf > 0');
  var o={mode:$('mode').value,gap:number('gap'),adaptive_gap:!!($('adaptiveGap')&&$('adaptiveGap').checked),margin:0,margin_left:number('margin_left'),margin_top:number('margin_top'),margin_right:number('margin_right'),margin_bottom:number('margin_bottom'),
  rotations:$('rotation').value.split(',').map(Number),families:$('families').value,family_layout:$('familyLayout').value,outline_aware:$('families').value==='auto'&&$('outlineAware').checked,flow:$('flow').value,travel_order:$('travel').value,operation:op,kerf_mm:kerf,lang:lang,
  trials:integerOption('trials',1,30),time_budget_sec:number('timeBudget'),seed:integerOption('seed',-2147483648,2147483647),contour_anchors:$('contourAnchors').checked,advanced_geometry:$('advancedGeometry').checked,advanced_search:$('advancedSearch').checked,
  guided_objectives:$('multiEnabled').checked && $('guidedObjectives').checked,
  objective_weights:$('multiEnabled').checked?{area:number('wArea'),spacing:number('wSpacing'),travel:number('wTravel')}:null,
  cut_common_line_audit:op==='cut'&&$('commonLineAudit').checked};
- if($('semanticOrder')&&$('semanticOrder').checked){
-  if(o.family_layout!=='family_first'||o.flow!=='rows'||o.rotations.join(',')!=='0'||o.mode==='ordered')throw Error(lang==='ru'?'Смысловой порядок требует Упорядоченные семейства, Рядами, 0° и Uniform/Dense':'Semantic numbering requires Ordered Families, Rows, 0° and Uniform/Dense');
-  if(!lastFolder||!fs||!path)throw Error('Export the plate before selecting semantic order');
-  var filename=path.join(lastFolder,'semantic_order.json');
-  if(!fs.existsSync(filename))throw Error(lang==='ru'?'Не найден semantic_order.json в папке экспорта: '+lastFolder:'Missing semantic_order.json in '+lastFolder);
-  var textValue=fs.readFileSync(filename,'utf8');if(textValue.length>131072)throw Error('Semantic manifest is too large');
-  o.semantic_map=JSON.parse(textValue.replace(/^\uFEFF/,''));
+ if(o.family_layout==='semantic'){
+  if(o.flow!=='rows'||o.rotations.join(',')!=='0'||o.mode==='ordered')throw Error(lang==='ru'?'Смысловой порядок: выберите Рядами, 0° и Равномерно или Плотно':'Semantic order requires Rows, 0°, Uniform or Dense');
+  o.family_layout='family_first';
+  if(!lastFolder||!fs||!path)throw Error('Export the plate first');
+  var data=loadFamilyPlan();
+  if(data&&data.rows&&data.rows.length){
+   var entries={};
+   // Default automatically detected groups carry no meaningful order. They
+   // must not force strict shelving and slash a manufacturable 4.5 mm gap.
+   // Only explicitly reviewed semantics activate strict order constraints.
+   data.rows.forEach(function(row){
+    if(!hasReviewedSemanticIntent(row))return;
+    (row.uuids||[]).forEach(function(id){
+     if(!/^[\w.-]{1,128}$/.test(String(id)))throw Error('Unsafe Illustrator UUID');
+     entries['uuid:'+String(id).toLowerCase()]={section:row.section,value:row.value===null?null:Number(row.value),priority:row.priority,status:row.status};
+    });
+   });
+   if(Object.keys(entries).length)o.semantic_map={schema:1,document_name:data.document_name,entries:entries};
+  }
  }
  return o;}
-function applyOptions(o){['mode','gap','margin_left','margin_top','margin_right','margin_bottom','families','family_layout','flow','travel_order','operation','kerf_mm'].forEach(function(k){var id=k==='travel_order'?'travel':k==='kerf_mm'?'kerf':k==='family_layout'?'familyLayout':k;if(o[k]!==undefined&&$(id))$(id).value=String(o[k]);});if(o.outline_aware!==undefined)$('outlineAware').checked=!!o.outline_aware;if(o.adaptive_gap!==undefined&&$('adaptiveGap'))$('adaptiveGap').checked=!!o.adaptive_gap;if(o.semantic_order!==undefined&&$('semanticOrder'))$('semanticOrder').checked=!!o.semantic_order;if(o.trials!==undefined)$('trials').value=String(o.trials);if(o.time_budget_sec!==undefined)$('timeBudget').value=String(o.time_budget_sec);if(o.seed!==undefined)$('seed').value=String(o.seed);if(o.contour_anchors!==undefined)$('contourAnchors').checked=!!o.contour_anchors;if(o.advanced_geometry!==undefined)$('advancedGeometry').checked=!!o.advanced_geometry;if(o.advanced_search!==undefined)$('advancedSearch').checked=!!o.advanced_search;$('guidedObjectives').checked=!!o.guided_objectives;if(o.objective_weights){$('multiEnabled').checked=true;$('wArea').value=o.objective_weights.area;$('wSpacing').value=o.objective_weights.spacing;$('wTravel').value=o.objective_weights.travel;$('objectivePreset').value='custom';}else $('multiEnabled').checked=false;if(o.cut_common_line_audit!==undefined)$('commonLineAudit').checked=!!o.cut_common_line_audit;if(Array.isArray(o.rotations))$('rotation').value=o.rotations.join(',');if(o.lang)setLanguage(o.lang);operationVisibility();familyMatchingVisibility();}
+function applyOptions(o){['mode','gap','margin_left','margin_top','margin_right','margin_bottom','families','family_layout','flow','travel_order','operation','kerf_mm'].forEach(function(k){var id=k==='travel_order'?'travel':k==='kerf_mm'?'kerf':k==='family_layout'?'familyLayout':k;if(o[k]!==undefined&&$(id))$(id).value=String(o[k]);});if(o.outline_aware!==undefined)$('outlineAware').checked=!!o.outline_aware;if(o.adaptive_gap!==undefined&&$('adaptiveGap'))$('adaptiveGap').checked=!!o.adaptive_gap;if(o.trials!==undefined)$('trials').value=String(o.trials);if(o.time_budget_sec!==undefined)$('timeBudget').value=String(o.time_budget_sec);if(o.seed!==undefined)$('seed').value=String(o.seed);if(o.contour_anchors!==undefined)$('contourAnchors').checked=!!o.contour_anchors;if(o.advanced_geometry!==undefined)$('advancedGeometry').checked=!!o.advanced_geometry;if(o.advanced_search!==undefined)$('advancedSearch').checked=!!o.advanced_search;$('guidedObjectives').checked=!!o.guided_objectives;if(o.objective_weights){$('multiEnabled').checked=true;$('wArea').value=o.objective_weights.area;$('wSpacing').value=o.objective_weights.spacing;$('wTravel').value=o.objective_weights.travel;$('objectivePreset').value='custom';}else $('multiEnabled').checked=false;if(o.cut_common_line_audit!==undefined)$('commonLineAudit').checked=!!o.cut_common_line_audit;if(Array.isArray(o.rotations))$('rotation').value=o.rotations.join(',');if(o.lang)setLanguage(o.lang);operationVisibility();familyMatchingVisibility();familyEditorModeChanged();}
 var objectiveProfiles={balanced:[5,3.5,1.5],compact:[10,0,0],uniform:[3,7,0],travel:[0,0,10]};
 function setObjectiveProfile(){var a=objectiveProfiles[$('objectivePreset').value];if(!a)return;$('wArea').value=a[0];$('wSpacing').value=a[1];$('wTravel').value=a[2];}
 function familyMatchingVisibility(){var disabled=$('families').value!=='auto';$('outlineAware').disabled=disabled;if($('outlineMatchContext'))$('outlineMatchContext').style.display=disabled?'block':'none';}
 function operationVisibility(){$('kerfWrap').style.display=$('operation').value==='cut'?'block':'none';$('cutAuditWrap').style.display=$('operation').value==='cut'?'block':'none';}
 function percent(stage,done,total){var ranges={searching:[3,95],preparing:[0,3],placing:[3,80],refining:[80,92],compacting:[92,97],validating:[97,99],complete:[99,99]};var a=ranges[stage]||[0,0];return Math.max(0,Math.min(99,Math.floor(a[0]+(a[1]-a[0])*done/Math.max(total,1))));}
 function bar(value,stage,done,total){$('progressFill').style.width=value+'%';$('stage').textContent=(t('stages')[stage]||stage)+' ('+done+'/'+total+') — '+value+'%';}
-function clearPreview(){paretoTrial=null;currentSemanticAudit=null;if($('semanticNotice')){$('semanticNotice').className='hidden';$('semanticNotice').textContent='';}currentGapAdjustment=null;if($('gapNotice')){$('gapNotice').className='hidden';$('gapNotice').textContent='';}if($('paretoSelect')){$('paretoSelect').innerHTML='<option value="">—</option>';$('paretoSummary').textContent='';}calcReady=false;$('apply').disabled=true;$('preview').removeAttribute('src');$('preview').className='hidden';$('previewEmpty').className='';$('report').textContent='';$('familyReviewContent').textContent='';currentFamilyAudit=[];$('progressFill').style.width='0%';}
+function clearPreview(){paretoTrial=null;currentSemanticAudit=null;currentFamilyCatalog=[];familyPlan=[];if($('familyEditorSection'))$('familyEditorSection').className='hidden';if($('semanticNotice')){$('semanticNotice').className='hidden';$('semanticNotice').textContent='';}currentGapAdjustment=null;if($('gapNotice')){$('gapNotice').className='hidden';$('gapNotice').textContent='';}if($('paretoSelect')){$('paretoSelect').innerHTML='<option value="">—</option>';$('paretoSummary').textContent='';}calcReady=false;$('apply').disabled=true;$('preview').removeAttribute('src');$('preview').className='hidden';$('previewEmpty').className='';$('report').textContent='';$('familyReviewContent').textContent='';currentFamilyAudit=[];$('progressFill').style.width='0%';}
 function showPreview(kind){currentPreview=kind;if(!lastFolder||!safeRoot()){status(t('noInput'),true);return;}var f=path.join(lastFolder,kind==='route'?'route_test.svg':kind==='best'?'best_so_far.svg':kind==='pareto'?path.join('alternatives','trial_'+String(paretoTrial).padStart(2,'0')+'.svg'):'preview_test.svg');try{
  if(!fs.existsSync(f))throw Error('Preview not found: '+f);if(fs.statSync(f).size>8*1024*1024)throw Error('SVG preview too large');
  var svg=fs.readFileSync(f);$('preview').src='data:image/svg+xml;base64,'+svg.toString('base64');$('preview').className='';$('previewEmpty').className='hidden';
@@ -112,12 +133,151 @@ function renderFamilyAudit(){
    return heading;
  }).join('\n');
 }
+
+function familyEditorModeChanged(){
+ var active=$('familyLayout').value==='semantic';
+ $('semanticModeHelp').className=active?'fineprint':'fineprint hidden';
+ calcReady=false;$('apply').disabled=true;
+ if(active){
+  $('flow').value='rows';$('rotation').value='0';
+  if($('mode').value==='ordered')$('mode').value='uniform';
+  if(currentFamilyCatalog.length)renderFamilyEditor();
+ }else if($('familyEditorSection')){$('familyEditorSection').className='hidden';}
+}
+function familyPlanPath(){return path.join(lastFolder,'family_plan.json');}
+function loadFamilyPlan(){
+ if(!fs||!lastFolder||!currentInput)return null;
+ var f=familyPlanPath();
+ if(!fs.existsSync(f))return null;
+ var doc=JSON.parse(fs.readFileSync(currentInput,'utf8')).document_name;
+ var obj=JSON.parse(fs.readFileSync(f,'utf8'));
+ if(obj.schema!==1||obj.document_name!==doc||!Array.isArray(obj.rows)||obj.rows.length>1000)
+  throw Error(lang==='ru'?'Разметка относится к другому документу или повреждена':'Invalid family plan or document mismatch');
+ return obj;
+}
+function saveFamilyPlan(dirty){
+ if(!fs||!lastFolder||!currentInput||!familyPlan.length)return;
+ var doc=JSON.parse(fs.readFileSync(currentInput,'utf8')).document_name;
+ var data={schema:1,document_name:doc,rows:familyPlan.map(function(row){
+  return {uuids:row.uuids.slice(),edited:!!row.edited,section:row.section,value:row.value,
+          priority:row.priority,status:row.status,label:row.label};
+ })};
+ var dest=familyPlanPath(),temp=dest+'.tmp';
+ fs.writeFileSync(temp,JSON.stringify(data,null,2),'utf8');
+ fs.renameSync(temp,dest);
+ var count=familyPlan.filter(hasReviewedSemanticIntent).length;
+ $('familyEditorStatus').textContent=(lang==='ru'?'Сохранено · смысловых правил подтверждено ':'Saved · verified semantic rules ')+count+'/'+familyPlan.length;
+ if(dirty){calcReady=false;$('apply').disabled=true;status(lang==='ru'?'Правила изменены: нажмите «Рассчитать» перед применением':'Family rules changed: calculate again before applying');}
+}
+function familyThumbnail(item){
+ var polygons=[],total=0;
+ function visit(g){
+  if(!g||polygons.length>=14||total>3000)return;
+  if((g.type==='path'||g.type==='stroke')&&Array.isArray(g.ring||g.points)){
+   var pts=g.ring||g.points;
+   if(pts.length>=2){polygons.push({p:pts.slice(0,650),close:g.type==='path'||g.closed});total+=pts.length;}
+  }
+  if(g.type==='compound'&&Array.isArray(g.rings))g.rings.forEach(function(r){visit({type:'path',ring:r});});
+  if(Array.isArray(g.children))g.children.forEach(visit);
+ }
+ visit(item.geometry);if(!polygons.length)return null;
+ var xmin=Infinity,ymin=Infinity,xmax=-Infinity,ymax=-Infinity;
+ polygons.forEach(function(g){g.p.forEach(function(q){var x=Number(q[0]),y=Number(q[1]);if(isFinite(x)&&isFinite(y)){xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,y);ymax=Math.max(ymax,y);}});});
+ if(!isFinite(xmin))return null;
+ var pad=Math.max(xmax-xmin,ymax-ymin)*.09+.1,wx=Math.max(1e-3,xmax-xmin+2*pad),wy=Math.max(1e-3,ymax-ymin+2*pad);
+ var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="'+(xmin-pad)+' '+(ymin-pad)+' '+wx+' '+wy+'">';
+ polygons.forEach(function(g){var d='';g.p.forEach(function(q,i){d+=(i?'L':'M')+Number(q[0]).toFixed(4)+' '+Number(q[1]).toFixed(4)+' ';});if(g.close)d+='Z';svg+='<path d="'+d+'" fill="'+(g.close?'#89a7c0':'none')+'" fill-rule="evenodd" stroke="#e0e9f4" stroke-width="'+Math.max(wx,wy)/110+'"/>';});
+ svg+='</svg>';return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+function renderFamilyEditor(){
+ if(!$('familyEditorSection')||!currentInput||!currentFamilyCatalog.length)return;
+ if($('familyLayout').value!=='semantic'){$('familyEditorSection').className='hidden';return;}
+ var input=JSON.parse(fs.readFileSync(currentInput,'utf8')),byId={};
+ (input.objects||[]).forEach(function(x){byId[String(x.id)]=x;});
+ var saved=loadFamilyPlan(),prior=saved?saved.rows:[];
+ var legacy=null,legacyPath=path.join(lastFolder,'semantic_order.json');
+ if(!saved&&fs.existsSync(legacyPath)){
+  try{legacy=JSON.parse(fs.readFileSync(legacyPath,'utf8')).entries||null;}catch(e){log('Legacy order import: '+e.message,'WARN');}
+ }
+ function legacyLabel(member){
+  if(!legacy)return null;
+  var name=String(member.name||''),m=name.match(/(P\d{2}-SYM-\d{3})(?!\d)/i);
+  return legacy['uuid:'+String(member.uuid||'').toLowerCase()]||(m?legacy['sym:'+m[1].toLowerCase()]:null);
+ }
+ familyPlan=currentFamilyCatalog.map(function(g,index){
+  var uuids=g.members.map(function(m){return String(m.uuid||'');}).filter(Boolean);
+  var matches=prior.filter(function(row){return (row.uuids||[]).some(function(u){return uuids.indexOf(String(u))>=0;});});
+  var old=matches[0];
+  var fallback=null;if(!old){for(var k=0;k<g.members.length;k++){fallback=legacyLabel(g.members[k]);if(fallback)break;}}
+  var codeMatch=String(g.members[0].name||'').match(/P\d{2}-SYM-\d{3}/i);
+  return {key:String(g.label),uuids:uuids,
+    label:matches.length>1?'⚠ '+(old.label||'Mixed family'):old?old.label:(codeMatch?codeMatch[0]:((lang==='ru'?'Семейство ':'Family ')+(index+1))),
+    section:old?old.section:fallback?fallback.section:'other',
+    value:old?old.value:fallback?fallback.value:null,
+    priority:old?old.priority:index,
+    status:(matches.length>1?'provisional':old?old.status:fallback?fallback.status:'provisional'),
+    edited:old?!!old.edited:false,
+    members:g.members,
+    firstId:g.members[0]&&String(g.members[0].id)};
+ });
+ familyPlan.sort(function(a,b){return a.priority-b.priority;});
+ $('familyEditorSection').className='';
+ $('familyEditorCount').textContent=familyPlan.length+(lang==='ru'?' семейств':' families');
+ var area=$('familyEditorRows');area.textContent='';
+ familyPlan.forEach(function(row,i){
+  var surface=document.createElement('div');surface.style.cssText='display:flex;gap:6px;align-items:center;border-bottom:1px solid #4f5966;padding:6px 0';
+  var image=document.createElement('img');image.style.cssText='width:45px;height:45px;object-fit:contain;background:#2a3440;border-radius:4px';
+  var src=byId[row.firstId];var visual=src&&familyThumbnail(src);if(visual)image.src=visual;else image.alt='—';surface.appendChild(image);
+  var body=document.createElement('div');body.style.cssText='min-width:0;flex:1';
+  var header=document.createElement('div');header.style.cssText='font-size:10px;color:#b9c8d8';
+  header.textContent=row.members.length+(lang==='ru'?' размеров / экз.':' items')+' · '+row.members.map(function(m){return Number(m.equivalent_mm).toFixed(1);}).join(' / ')+' мм';
+  body.appendChild(header);
+  var name=document.createElement('input');name.value=row.label||'';name.title='Family label';name.style.cssText='min-width:95px;width:100%;margin:2px 0';
+  name.addEventListener('change',function(){row.label=name.value.trim().slice(0,80);row.status='provisional';row.edited=true;saveFamilyPlan(true);});body.appendChild(name);
+  var controls=document.createElement('div');controls.style.cssText='display:flex;gap:3px';
+  var section=document.createElement('select');section.style.cssText='width:48%;min-width:70px';
+  var types=[['roman','Римские'],['gothic','Готические'],['chapter','Ордена'],['role','Роли'],['carrier','Подложки'],['other','Прочее']];
+  types.forEach(function(t){var opt=document.createElement('option');opt.value=t[0];opt.textContent=t[1];section.appendChild(opt);});section.value=row.section;controls.appendChild(section);
+  var value=document.createElement('input');value.type='number';value.min='1';value.max='500';value.placeholder='№';value.value=row.value===null?'':row.value;value.title='Numerical value';value.style.cssText='min-width:32px;width:26%';controls.appendChild(value);
+  var check=document.createElement('input');check.type='checkbox';check.checked=row.status==='confirmed';check.title=lang==='ru'?'Номинал и семейство проверены':'Verified';check.style.cssText='width:auto';controls.appendChild(check);
+  section.addEventListener('change',function(){row.section=section.value;row.status='provisional';row.edited=true;check.checked=false;saveFamilyPlan(true);});
+  value.addEventListener('change',function(){var n=value.value.trim();if(n&&!/^[1-9]\d{0,2}$/.test(n)){value.value='';n='';}row.value=n?Number(n):null;row.status='provisional';row.edited=true;check.checked=false;saveFamilyPlan(true);});
+  check.addEventListener('change',function(){if(check.checked&&((row.section==='roman'||row.section==='gothic')&&!row.value)){check.checked=false;return status('Enter numeric value first',true);}row.status=check.checked?'confirmed':'provisional';saveFamilyPlan(true);});
+  body.appendChild(controls);surface.appendChild(body);
+  var move=document.createElement('div');move.style.cssText='display:flex;flex-direction:column;gap:2px';
+  function arrow(symbol,offset){var btn=document.createElement('button');btn.type='button';btn.textContent=symbol;btn.style.cssText='min-height:23px;padding:2px 5px';btn.disabled=(i+offset<0||i+offset>=familyPlan.length);btn.addEventListener('click',function(){var other=familyPlan[i+offset];familyPlan[i+offset]=familyPlan[i];familyPlan[i]=other;familyPlan.forEach(function(r,j){r.priority=j;r.status='provisional';r.edited=true;});saveFamilyPlan(true);renderFamilyEditor();});move.appendChild(btn);}
+  arrow('↑',-1);arrow('↓',1);surface.appendChild(move);area.appendChild(surface);
+ });
+ saveFamilyPlan(!saved);
+}
+function confirmFamilyPlan(){
+ if(!familyPlan.length)return;
+ // Do not turn 13 generic P01 "other" families into fake verified semantics.
+ var eligible=familyPlan.filter(function(row){
+  return row.section!=='other'||row.edited===true;
+ }).filter(function(row){
+  return (row.section!=='roman'&&row.section!=='gothic')||Number.isInteger(row.value);
+ });
+ if(!eligible.length){
+  status(lang==='ru'
+   ?'Сначала укажите и проверьте смысловую категорию/номинал или измените порядок вручную. Автоматические «Прочее» не подтверждаются массово.'
+   :'Assign and check a category/value or manually reorder a family. Generic Other rows cannot be bulk confirmed.',true);
+  return;
+ }
+ if(!window.confirm((lang==='ru'
+  ?'Вы лично проверили '
+  :'Have you visually verified ')+eligible.length+
+  (lang==='ru'?' размеченных семейств? Остальные останутся предварительными.':' mapped families? The rest remain provisional.')))return;
+ eligible.forEach(function(row){row.status='confirmed';});
+ saveFamilyPlan(true);renderFamilyEditor();
+}
+
 function refreshRules(){try{if(!fs||!lastFolder)return;var f=path.join(lastFolder,'constraints.json');if(!fs.existsSync(f)){$('rulesCount').textContent='0';return;}var data=JSON.parse(fs.readFileSync(f,'utf8'));$('rulesCount').textContent=Object.keys(data.items||{}).length;}catch(e){log('Constraint count: '+e.message,'WARN');}}
 function presetDir(){return path.join(root,'presets');}
 function refreshPresets(){if(!fs||!root)return;try{var dir=presetDir();fs.mkdirSync(dir,{recursive:true});var sel=$('presets'),old=sel.value;while(sel.options.length)sel.remove(0);var blank=document.createElement('option');blank.value='';blank.textContent=t('presetPlaceholder');sel.appendChild(blank);
  fs.readdirSync(dir).filter(function(s){return /^[\w\u0400-\u04ff \-]{1,48}\.json$/i.test(s);}).sort().forEach(function(name){var opt=document.createElement('option');opt.value=name;opt.textContent=name.replace(/\.json$/i,'');sel.appendChild(opt);});sel.value=old;
  }catch(e){log('Preset scan: '+e.message,'WARN');}}
-function savePreset(){if(!safeRoot())return status(t('noNode'),true);var name=$('presetName').value.trim();if(!/^[\w\u0400-\u04ff \-]{1,48}$/.test(name))return status('Use 1–48 letters, digits, spaces, _ or -',true);try{var o=options(),dir=presetDir();if(o.semantic_map){delete o.semantic_map;o.semantic_order=true;}else{o.semantic_order=false;}fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,name+'.json'),JSON.stringify({schema:1,options:o},null,2),'utf8');refreshPresets();$('presets').value=name+'.json';status(t('saved')+': '+name);log('Saved preset: '+name);}catch(e){status(t('failed')+': '+e.message,true);}}
+function savePreset(){if(!safeRoot())return status(t('noNode'),true);var name=$('presetName').value.trim();if(!/^[\w\u0400-\u04ff \-]{1,48}$/.test(name))return status('Use 1–48 letters, digits, spaces, _ or -',true);try{var o=options(),dir=presetDir();if(o.semantic_map)delete o.semantic_map;if($('familyLayout').value==='semantic')o.family_layout='semantic';fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,name+'.json'),JSON.stringify({schema:1,options:o},null,2),'utf8');refreshPresets();$('presets').value=name+'.json';status(t('saved')+': '+name);log('Saved preset: '+name);}catch(e){status(t('failed')+': '+e.message,true);}}
 function loadPreset(){if(!safeRoot())return status(t('noNode'),true);var name=$('presets').value;if(!name)return status(t('noPreset'),true);try{if(!/^[\w\u0400-\u04ff \-]{1,48}\.json$/.test(name))throw Error('Invalid preset name');var p=JSON.parse(fs.readFileSync(path.join(presetDir(),name),'utf8'));if(p.schema!==1||!p.options||typeof p.options!=='object')throw Error('Invalid preset');applyOptions(p.options);status(t('loaded')+': '+name);log('Loaded preset: '+name);}catch(e){status(t('failed')+': '+e.message,true);}}
 function findRecent(){if(!safeRoot())return;try{var base=path.join(root,'workspace');if(!fs.existsSync(base))return;var found=[];fs.readdirSync(base).forEach(function(name){var f=path.join(base,name,'input_copy.json');if(fs.existsSync(f))found.push({f:f,time:fs.statSync(f).mtimeMs});});found.sort(function(a,b){return b.time-a.time;});if(found.length&&!currentInput){currentInput=found[0].f;lastFolder=path.dirname(currentInput);$('documentName').textContent=t('lastExport')+': '+path.basename(lastFolder);refreshRules();}}catch(e){log('Latest export scan: '+e.message,'WARN');}}
 function workerPath(){
@@ -152,7 +312,7 @@ function beginCalculation(){if(busy)return;if(!safeRoot())return status(t('noNod
  if(job.receipt && code===0 && fs.existsSync(job.receipt.result)){
   lastFolder=job.receipt.folder;calcReady=true;busyOn(false);var r=job.receipt.report;currentGapAdjustment=r.gap_adjustment||null;currentSemanticAudit=r.semantic_order||null;$('report').textContent=r.object_count+(lang==='ru'?' объектов · ':' objects · ')+r.cluster_count+(lang==='ru'?' групп · ':' families · ')+Number(r.min_clearance_mm).toFixed(3)+' mm · '+Number(r.occupied_bbox_mm2).toFixed(1)+' mm² · '+(r.within_margins?'✓':'!');
   showPreview('plate');
-  if(r.family_audit){currentFamilyAudit=r.family_audit;renderFamilyAudit();log('Families grouped: '+r.family_audit.length);}
+  if(r.family_audit){currentFamilyAudit=r.family_audit;renderFamilyAudit();log('Families grouped: '+r.family_audit.length);}if(r.family_catalog){currentFamilyCatalog=r.family_catalog;renderFamilyEditor();}
   // Non-dominated alternatives are view-only. No automatic apply action.
   if($('paretoSelect')){
    var sel=$('paretoSelect'); while(sel.options.length)sel.remove(0);
@@ -161,7 +321,14 @@ function beginCalculation(){if(busy)return;if(!safeRoot())return status(t('noNod
       opt.value=String(rec.trial);opt.textContent='#'+rec.trial+' · '+Number(rec.bbox_mm2).toFixed(0)+' mm² · '+Number(rec.travel_mm).toFixed(0)+(lang==='ru'?' мм':' mm');sel.appendChild(opt);});
    $('paretoSummary').textContent=(r.pareto_frontier||[]).length+(lang==='ru'?' альтернатив · только просмотр':' alternatives · preview only');
   }
-  if(r.multiobjective&&r.multiobjective.metrics){var mm=r.multiobjective.metrics;log('Multi-objective: '+JSON.stringify(r.multiobjective.weights)+' / '+JSON.stringify(mm));$('report').textContent+=(lang==='ru'?' · 3 критерия':' · 3 objectives');}if(r.common_line_audit&&r.common_line_audit.status){log('Common-line inspection ONLY: '+r.common_line_audit.candidate_count+' candidate pairs in ORIGINAL drawing');$('report').textContent+=' · common-edge audit '+r.common_line_audit.candidate_count;}if(r.search&&r.search.completed_trials){log('Search: '+r.search.completed_trials+'/'+r.search.requested_trials+' runs, best='+r.search.best_trial+', score='+r.search.score);$('report').textContent+=' · best '+r.search.best_trial+'/'+r.search.completed_trials;}status(t('finished'));if(r.advanced_geometry&&r.advanced_geometry.enabled){var g=r.advanced_geometry;log('Advanced geometry: '+(g.skipped?'skipped ('+g.reason+')':(g.accepted?'accepted':'no improvement'))+', moves='+(g.moves||0)+', generalized-NFP contacts='+((g.constructive_nfp_pairs||0)+(g.general_nfp_pairs||0)));}if(r.advanced_search){log('Python LNS: '+(r.advanced_search.accepted?'improved':'baseline kept')+', tested='+r.advanced_search.neighbourhoods+', gain='+r.advanced_search.objective_gain);}if(r.family_layout&&r.family_layout.fallback_reason){log('Family-first fallback: '+r.family_layout.fallback_reason,'WARN');$('report').textContent+=(lang==='ru'?' · компактный вариант':' · compact layout');status(lang==='ru'?'Упорядоченная раскладка не поместилась — применён проверенный компактный вариант.':'Ordered family shelves could not fit — verified compact layout used.');}if(r.semantic_order&&r.semantic_order.enabled){var meta=r.semantic_order;var semanticMsg=(lang==='ru'?'Смысловой порядок: ':'Semantic order: ')+meta.mapped_family_count+'/'+meta.family_count+(lang==='ru'?' семейств размечено.':' families mapped.');if(meta.unmapped_families.length||meta.provisional_families.length){semanticMsg+=' '+(lang==='ru'?'ТРЕБУЕТ ПРОВЕРКИ: ':'REVIEW REQUIRED: ')+meta.unmapped_families.length+(lang==='ru'?' без номинала, ':' unmapped, ')+meta.provisional_families.length+(lang==='ru'?' предварительных.':' provisional.');$('semanticNotice').className='';$('semanticNotice').textContent=semanticMsg;log(semanticMsg,'WARN');}else log(semanticMsg);}if(r.gap_adjustment&&r.gap_adjustment.reduced){var a=r.gap_adjustment;var message=(lang==='ru'?'ВНИМАНИЕ: заданный зазор '+Number(a.requested_mm).toFixed(3)+' мм не достигнут. Использован '+Number(a.used_mm).toFixed(3)+' мм. Перед применением обязательно проверьте результат.':'WARNING: requested clearance '+Number(a.requested_mm).toFixed(3)+' mm was not achieved. Used '+Number(a.used_mm).toFixed(3)+' mm. Review before applying.');$('gapNotice').textContent=message;$('gapNotice').className='';$('report').textContent+=' · '+(lang==='ru'?'факт. зазор ':'actual gap ')+Number(a.used_mm).toFixed(3)+' mm';status(message);log(message,'WARN');}if(r.warnings&&r.warnings.length)log('Warnings: '+r.warnings.join('; '),'WARN');return;
+  if(r.multiobjective&&r.multiobjective.metrics){var mm=r.multiobjective.metrics;log('Multi-objective: '+JSON.stringify(r.multiobjective.weights)+' / '+JSON.stringify(mm));$('report').textContent+=(lang==='ru'?' · 3 критерия':' · 3 objectives');}if(r.common_line_audit&&r.common_line_audit.status){log('Common-line inspection ONLY: '+r.common_line_audit.candidate_count+' candidate pairs in ORIGINAL drawing');$('report').textContent+=' · common-edge audit '+r.common_line_audit.candidate_count;}if(r.search&&r.search.completed_trials){log('Search: '+r.search.completed_trials+'/'+r.search.requested_trials+' runs, best='+r.search.best_trial+', score='+r.search.score);$('report').textContent+=' · best '+r.search.best_trial+'/'+r.search.completed_trials;}status(t('finished'));if(r.advanced_geometry&&r.advanced_geometry.enabled){var g=r.advanced_geometry;log('Advanced geometry: '+(g.skipped?'skipped ('+g.reason+')':(g.accepted?'accepted':'no improvement'))+', moves='+(g.moves||0)+', generalized-NFP contacts='+((g.constructive_nfp_pairs||0)+(g.general_nfp_pairs||0)));}if(r.advanced_search){log('Python LNS: '+(r.advanced_search.accepted?'improved':'baseline kept')+', tested='+r.advanced_search.neighbourhoods+', gain='+r.advanced_search.objective_gain);}if(r.family_layout&&r.family_layout.fallback_reason){log('Family-first fallback: '+r.family_layout.fallback_reason,'WARN');$('report').textContent+=(lang==='ru'?' · компактный вариант':' · compact layout');status(lang==='ru'?'Упорядоченная раскладка не поместилась — применён проверенный компактный вариант.':'Ordered family shelves could not fit — verified compact layout used.');}if($('familyLayout').value==='semantic'&&(!r.semantic_order||!r.semantic_order.enabled)){
+  calcReady=false;$('apply').disabled=true;
+  var draftText=lang==='ru'
+   ?'Предварительная раскладка: подтверждённые смысловые правила отсутствуют или ещё не применены. Автоматическая группировка сохраняет заданный зазор там, где это возможно. Для собственного порядка задайте и подтвердите категории/номиналы в редакторе, затем пересчитайте.'
+   :'Exploratory layout: no verified semantic rules were applied. Automatic family placement preserves the requested gap where possible. Confirm categories/values and recalculate for custom order.';
+  $('semanticNotice').className='';$('semanticNotice').textContent=draftText;
+  status(draftText);log(draftText,'WARN');
+ }if(r.semantic_order&&r.semantic_order.enabled){var meta=r.semantic_order;var semanticMsg=(lang==='ru'?'Смысловой порядок: ':'Semantic order: ')+meta.mapped_family_count+'/'+meta.family_count+(lang==='ru'?' семейств размечено.':' families mapped.');if(meta.unmapped_families.length||meta.provisional_families.length){semanticMsg+=' '+(lang==='ru'?'ТРЕБУЕТ ПРОВЕРКИ: ':'REVIEW REQUIRED: ')+meta.unmapped_families.length+(lang==='ru'?' без номинала, ':' unmapped, ')+meta.provisional_families.length+(lang==='ru'?' предварительных.':' provisional.');$('semanticNotice').className='';$('semanticNotice').textContent=semanticMsg;log(semanticMsg,'WARN');}else log(semanticMsg);}if(r.gap_adjustment&&r.gap_adjustment.reduced){var a=r.gap_adjustment;var message=(lang==='ru'?'ВНИМАНИЕ: заданный зазор '+Number(a.requested_mm).toFixed(3)+' мм не достигнут. Использован '+Number(a.used_mm).toFixed(3)+' мм. Перед применением обязательно проверьте результат.':'WARNING: requested clearance '+Number(a.requested_mm).toFixed(3)+' mm was not achieved. Used '+Number(a.used_mm).toFixed(3)+' mm. Review before applying.');$('gapNotice').textContent=message;$('gapNotice').className='';$('report').textContent+=' · '+(lang==='ru'?'факт. зазор ':'actual gap ')+Number(a.used_mm).toFixed(3)+' mm';status(message);log(message,'WARN');}if(r.warnings&&r.warnings.length)log('Warnings: '+r.warnings.join('; '),'WARN');return;
  }
  status(t('failed')+': '+(job.error||stderr||'Worker exited: '+code),true);
  });
@@ -170,10 +337,10 @@ function cancelCalculation(){if(!activeJob)return;activeJob.cancelled=true;statu
 function toggleLang(){setLanguage(lang==='ru'?'en':'ru');}
 function connect(){
  $('export').addEventListener('click',function(){invoke('export');});$('apply').addEventListener('click',function(){if(currentSemanticAudit&&currentSemanticAudit.enabled&&(currentSemanticAudit.unmapped_families.length||currentSemanticAudit.provisional_families.length||currentSemanticAudit.partially_mapped_families.length)){var n=currentSemanticAudit;var message=(lang==='ru'?'ВНИМАНИЕ: смысловая таблица не подтверждена. Неразмеченных семейств: '+n.unmapped_families.length+', предварительных: '+n.provisional_families.length+'. Проверили все числовые символы в Illustrator и готовы применить?':'WARNING: semantic mappings are not fully verified. Unmapped families: '+n.unmapped_families.length+', provisional: '+n.provisional_families.length+'. Have you checked all number symbols before applying?');if(!window.confirm(message))return;}if(currentGapAdjustment&&currentGapAdjustment.reduced){var a=currentGapAdjustment;var prompt=(lang==='ru'?'ВНИМАНИЕ: задано '+Number(a.requested_mm).toFixed(3)+' мм, использовано '+Number(a.used_mm).toFixed(3)+' мм. Вы проверили раскладку и хотите применить её к Illustrator?':'WARNING: requested '+Number(a.requested_mm).toFixed(3)+' mm, used '+Number(a.used_mm).toFixed(3)+' mm. Have you reviewed the layout and want to apply it?');if(!window.confirm(prompt))return;}invoke('apply');});$('languageAI').addEventListener('click',function(){invoke('language');});$('saveRules').addEventListener('click',invokeRules);
- $('calculate').addEventListener('click',beginCalculation);$('objectivePreset').addEventListener('change',setObjectiveProfile);['wArea','wSpacing','wTravel'].forEach(function(k){$(k).addEventListener('input',function(){$('objectivePreset').value='custom';});});$('cancel').addEventListener('click',cancelCalculation);$('operation').addEventListener('change',operationVisibility);$('families').addEventListener('change',familyMatchingVisibility);
+ $('calculate').addEventListener('click',beginCalculation);$('objectivePreset').addEventListener('change',setObjectiveProfile);['wArea','wSpacing','wTravel'].forEach(function(k){$(k).addEventListener('input',function(){$('objectivePreset').value='custom';});});$('cancel').addEventListener('click',cancelCalculation);$('operation').addEventListener('change',operationVisibility);$('families').addEventListener('change',familyMatchingVisibility);$('familyLayout').addEventListener('change',familyEditorModeChanged);
  $('lang').addEventListener('click',toggleLang);$('showPreview').addEventListener('click',function(){showPreview('plate');});$('showRoute').addEventListener('click',function(){showPreview('route');});
  $('showPareto').addEventListener('click',function(){paretoTrial=$('paretoSelect').value;if(paretoTrial)showPreview('pareto');});
- $('showBest').addEventListener('click',function(){showPreview('best');});$('showFamilyIds').addEventListener('change',renderFamilyAudit);$('savePreset').addEventListener('click',savePreset);$('loadPreset').addEventListener('click',loadPreset);$('refreshPresets').addEventListener('click',refreshPresets);
+ $('showBest').addEventListener('click',function(){showPreview('best');});$('confirmFamilyPlan').addEventListener('click',confirmFamilyPlan);$('showFamilyIds').addEventListener('change',renderFamilyAudit);$('savePreset').addEventListener('click',savePreset);$('loadPreset').addEventListener('click',loadPreset);$('refreshPresets').addEventListener('click',refreshPresets);
 }
 window.addEventListener('beforeunload',function(){if(activeJob){try{activeJob.process.kill();}catch(ignore){}}});
 setupNode();connect();setLanguage('ru');operationVisibility();findRecent();status(safeRoot()?t('ready'):t('noNode'),!safeRoot());

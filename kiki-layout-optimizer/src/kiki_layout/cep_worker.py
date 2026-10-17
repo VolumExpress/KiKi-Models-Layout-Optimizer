@@ -93,6 +93,7 @@ def run(path: Path):
         "advanced_geometry":report.get("advanced_geometry",{}),
         "advanced_search":report.get("advanced_search",{}),
         "family_audit":report.get("family_audit",[]),
+        "family_catalog":report.get("family_catalog",[]),
         "family_layout":report.get("family_layout",{}),
         "semantic_order":report.get("semantic_order",{}),
         "gap_adjustment":report.get("gap_adjustment",{}),

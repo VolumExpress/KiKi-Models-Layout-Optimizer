@@ -9,7 +9,7 @@ import statistics
 import random
 import time
 from shapely.affinity import rotate, translate
-from .geometry import get_shapes
+from .geometry import get_shapes, duplicate_point_ring_audit
 from .families import detect_families, build_units
 from .constraints import validate_constraints, source_centre_mm
 
@@ -185,6 +185,13 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
             raise ValueError(f'Object {oid}: no rotation allowed by both global and individual settings')
         allowed[oid]=angles
     labels,warnings=detect_families(objects,shapes,families,family_threshold,outline_aware=outline_aware)
+    degenerate_audit=duplicate_point_ring_audit(data)
+    if degenerate_audit:
+        ids=", ".join(sorted(set(entry["object_id"] for entry in degenerate_audit)))
+        warnings.append(
+            f"Skipped {len(degenerate_audit)} geometrically empty identical-point "
+            f"compound rings in objects {ids}; original Illustrator artwork untouched. "
+            f"Inspect these objects before production.")
     # Locked objects are anchored independently and must never become movable
     # members of a detected family. A family with incompatible rotations is
     # broken into independent islands rather than silently violating a rule.
@@ -204,15 +211,20 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
     for ob in objects:
         oid=str(ob['id']);family_entries.setdefault(labels[oid],[]).append(oid)
     family_audit=[]
+    family_catalog=[]
+    object_by_id={str(ob['id']): ob for ob in objects}
     for label,group_ids in family_entries.items():
-        if len(group_ids)<2: continue
         members=[]
         for oid in group_ids:
             shape=shapes[oid]; x0,y0,x1,y1=shape.bounds
-            ob=next(v for v in objects if str(v['id'])==oid)
-            members.append({'id':oid,'name':ob.get('name',''),
+            ob=object_by_id[oid]
+            members.append({'id':oid,'uuid':str(ob.get('uuid','')),
+                'name':ob.get('name',''),
                 'equivalent_mm':round(math.sqrt((x1-x0)*(y1-y0)),2)})
-        family_audit.append({'label':label,'members':members})
+        entry={'label':label,'members':members}
+        family_catalog.append(entry)
+        if len(group_ids)>=2:
+            family_audit.append(entry)
     # Alternative family wraps are explored by multi-start without resizing any emblem.
     # The compact legacy algorithm retains its exact previous group width.
     width_fraction=family_width_fraction if family_layout=="family_first" else 0.55
@@ -593,6 +605,8 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
                            order=travel_order, start=(left,top), long_jump_mm=long_jump_mm)
     report={"object_count":len(ids),"cluster_count":len(units),
             "family_audit":family_audit,
+            "family_catalog":family_catalog,
+            "ignored_zero_area_rings":degenerate_audit,
             "family_layout": {"mode":family_layout,"shelf_fallbacks":shelf_fallbacks,
                               "unit_width_fraction":round(width_fraction,3),
                               "packing_strategy":family_packing_strategy if family_layout=="family_first" else "legacy",
@@ -680,7 +694,9 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
         def candidate_solver(candidate_gap, discovery):
             opts = dict(kwargs, gap=candidate_gap)
             # Speculative layouts must never become applicable checkpoints.
-            return layout(data, trials=1 if discovery else trials,
+            # Lower-gap search uses up to three varied attempts, not just a
+            # single greedy shelf, to avoid underestimating feasible clearance.
+            return layout(data, trials=min(trials, 3) if discovery else trials,
                 time_budget_sec=0 if discovery else time_budget_sec,
                 seed=seed, contour_anchors=contour_anchors,
                 advanced_geometry=advanced_geometry, advanced_search=advanced_search,
@@ -843,7 +859,11 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
                         else None), **kwargs)
         except ValueError as exc:
             if not isinstance(exc, PackingFailure):
-                nonpacking_failed=True
+                # Invalid input geometry, metadata or settings are invariant
+                # across all randomized packing trials. Fail immediately,
+                # instead of wasting 8 attempts and reporting a bogus
+                # 'No feasible trial' packing result.
+                raise
             failed.append({'trial':trial+1,'reason':str(exc)})
             if progress: progress('searching',(trial+1)*1000,trials*1000)
             continue
