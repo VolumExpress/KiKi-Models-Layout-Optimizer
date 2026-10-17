@@ -120,6 +120,126 @@ function renderFamilyAudit(){
    return heading;
  }).join('\n');
 }
+
+function familyEditorModeChanged(){
+ var active=$('familyLayout').value==='semantic';
+ $('semanticModeHelp').className=active?'fineprint':'fineprint hidden';
+ if(active){
+  $('flow').value='rows';$('rotation').value='0';
+  if($('mode').value==='ordered')$('mode').value='uniform';
+  if(currentFamilyCatalog.length)renderFamilyEditor();
+ }else if($('familyEditorSection')){$('familyEditorSection').className='hidden';}
+}
+function familyPlanPath(){return path.join(lastFolder,'family_plan.json');}
+function loadFamilyPlan(){
+ if(!fs||!lastFolder||!currentInput)return null;
+ var f=familyPlanPath();
+ if(!fs.existsSync(f))return null;
+ var doc=JSON.parse(fs.readFileSync(currentInput,'utf8')).document_name;
+ var obj=JSON.parse(fs.readFileSync(f,'utf8'));
+ if(obj.schema!==1||obj.document_name!==doc||!Array.isArray(obj.rows)||obj.rows.length>1000)
+  throw Error(lang==='ru'?'Разметка относится к другому документу или повреждена':'Invalid family plan or document mismatch');
+ return obj;
+}
+function saveFamilyPlan(){
+ if(!fs||!lastFolder||!currentInput||!familyPlan.length)return;
+ var doc=JSON.parse(fs.readFileSync(currentInput,'utf8')).document_name;
+ var data={schema:1,document_name:doc,rows:familyPlan.map(function(row){
+  return {uuids:row.uuids.slice(),section:row.section,value:row.value,
+          priority:row.priority,status:row.status,label:row.label};
+ })};
+ var dest=familyPlanPath(),temp=dest+'.tmp';
+ fs.writeFileSync(temp,JSON.stringify(data,null,2),'utf8');
+ fs.renameSync(temp,dest);
+ var count=familyPlan.filter(function(r){return r.status==='confirmed';}).length;
+ $('familyEditorStatus').textContent=(lang==='ru'?'Сохранено для этой пластины · подтверждено ':'Saved for this plate · confirmed ')+count+'/'+familyPlan.length;
+}
+function familyThumbnail(item){
+ var polygons=[],total=0;
+ function visit(g){
+  if(!g||polygons.length>=14||total>3000)return;
+  if((g.type==='path'||g.type==='stroke')&&Array.isArray(g.ring||g.points)){
+   var pts=g.ring||g.points;
+   if(pts.length>=2){polygons.push({p:pts.slice(0,650),close:g.type==='path'||g.closed});total+=pts.length;}
+  }
+  if(g.type==='compound'&&Array.isArray(g.rings))g.rings.forEach(function(r){visit({type:'path',ring:r});});
+  if(Array.isArray(g.children))g.children.forEach(visit);
+ }
+ visit(item.geometry);if(!polygons.length)return null;
+ var xmin=Infinity,ymin=Infinity,xmax=-Infinity,ymax=-Infinity;
+ polygons.forEach(function(g){g.p.forEach(function(q){var x=Number(q[0]),y=Number(q[1]);if(isFinite(x)&&isFinite(y)){xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,y);ymax=Math.max(ymax,y);}});});
+ if(!isFinite(xmin))return null;
+ var pad=Math.max(xmax-xmin,ymax-ymin)*.09+.1,wx=Math.max(1e-3,xmax-xmin+2*pad),wy=Math.max(1e-3,ymax-ymin+2*pad);
+ var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="'+(xmin-pad)+' '+(ymin-pad)+' '+wx+' '+wy+'">';
+ polygons.forEach(function(g){var d='';g.p.forEach(function(q,i){d+=(i?'L':'M')+Number(q[0]).toFixed(4)+' '+Number(q[1]).toFixed(4)+' ';});if(g.close)d+='Z';svg+='<path d="'+d+'" fill="'+(g.close?'#89a7c0':'none')+'" fill-rule="evenodd" stroke="#e0e9f4" stroke-width="'+Math.max(wx,wy)/110+'"/>';});
+ svg+='</svg>';return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+function renderFamilyEditor(){
+ if(!$('familyEditorSection')||!currentInput||!currentFamilyCatalog.length)return;
+ if($('familyLayout').value!=='semantic'){$('familyEditorSection').className='hidden';return;}
+ var input=JSON.parse(fs.readFileSync(currentInput,'utf8')),byId={};
+ (input.objects||[]).forEach(function(x){byId[String(x.id)]=x;});
+ var saved=loadFamilyPlan(),prior=saved?saved.rows:[];
+ var legacy=null,legacyPath=path.join(lastFolder,'semantic_order.json');
+ if(!saved&&fs.existsSync(legacyPath)){
+  try{legacy=JSON.parse(fs.readFileSync(legacyPath,'utf8')).entries||null;}catch(e){log('Legacy order import: '+e.message,'WARN');}
+ }
+ function legacyLabel(member){
+  if(!legacy)return null;
+  var name=String(member.name||''),m=name.match(/(P\d{2}-SYM-\d{3})(?!\d)/i);
+  return legacy['uuid:'+String(member.uuid||'').toLowerCase()]||(m?legacy['sym:'+m[1].toLowerCase()]:null);
+ }
+ familyPlan=currentFamilyCatalog.map(function(g,index){
+  var uuids=g.members.map(function(m){return String(m.uuid||'');}).filter(Boolean);
+  var old=prior.find(function(row){return (row.uuids||[]).some(function(u){return uuids.indexOf(String(u))>=0;});});
+  var fallback=null;if(!old){for(var k=0;k<g.members.length;k++){fallback=legacyLabel(g.members[k]);if(fallback)break;}}
+  var codeMatch=String(g.members[0].name||'').match(/P\d{2}-SYM-\d{3}/i);
+  return {key:String(g.label),uuids:uuids,
+    label:old?old.label:(codeMatch?codeMatch[0]:((lang==='ru'?'Семейство ':'Family ')+(index+1))),
+    section:old?old.section:fallback?fallback.section:'other',
+    value:old?old.value:fallback?fallback.value:null,
+    priority:old?old.priority:index,
+    status:old?old.status:fallback?fallback.status:'provisional',
+    members:g.members,
+    firstId:g.members[0]&&String(g.members[0].id)};
+ });
+ familyPlan.sort(function(a,b){return a.priority-b.priority;});
+ $('familyEditorSection').className='';
+ $('familyEditorCount').textContent=familyPlan.length+(lang==='ru'?' семейств':' families');
+ var area=$('familyEditorRows');area.textContent='';
+ familyPlan.forEach(function(row,i){
+  var surface=document.createElement('div');surface.style.cssText='display:flex;gap:6px;align-items:center;border-bottom:1px solid #4f5966;padding:6px 0';
+  var image=document.createElement('img');image.style.cssText='width:45px;height:45px;object-fit:contain;background:#2a3440;border-radius:4px';
+  var src=byId[row.firstId];var visual=src&&familyThumbnail(src);if(visual)image.src=visual;else image.alt='—';surface.appendChild(image);
+  var body=document.createElement('div');body.style.cssText='min-width:0;flex:1';
+  var header=document.createElement('div');header.style.cssText='font-size:10px;color:#b9c8d8';
+  header.textContent=row.members.length+(lang==='ru'?' размеров / экз.':' items')+' · '+row.members.map(function(m){return Number(m.equivalent_mm).toFixed(1);}).join(' / ')+' мм';
+  body.appendChild(header);
+  var name=document.createElement('input');name.value=row.label||'';name.title='Family label';name.style.cssText='min-width:95px;width:100%;margin:2px 0';
+  name.addEventListener('change',function(){row.label=name.value.trim().slice(0,80);row.status='provisional';saveFamilyPlan();});body.appendChild(name);
+  var controls=document.createElement('div');controls.style.cssText='display:flex;gap:3px';
+  var section=document.createElement('select');section.style.cssText='width:48%;min-width:70px';
+  var types=[['roman','Римские'],['gothic','Готические'],['chapter','Ордена'],['role','Роли'],['carrier','Подложки'],['other','Прочее']];
+  types.forEach(function(t){var opt=document.createElement('option');opt.value=t[0];opt.textContent=t[1];section.appendChild(opt);});section.value=row.section;controls.appendChild(section);
+  var value=document.createElement('input');value.type='number';value.min='1';value.max='500';value.placeholder='№';value.value=row.value===null?'':row.value;value.title='Numerical value';value.style.cssText='min-width:32px;width:26%';controls.appendChild(value);
+  var check=document.createElement('input');check.type='checkbox';check.checked=row.status==='confirmed';check.title=lang==='ru'?'Номинал и семейство проверены':'Verified';check.style.cssText='width:auto';controls.appendChild(check);
+  section.addEventListener('change',function(){row.section=section.value;row.status='provisional';check.checked=false;saveFamilyPlan();});
+  value.addEventListener('change',function(){var n=value.value.trim();if(n&&!/^[1-9]\d{0,2}$/.test(n)){value.value='';n='';}row.value=n?Number(n):null;row.status='provisional';check.checked=false;saveFamilyPlan();});
+  check.addEventListener('change',function(){if(check.checked&&((row.section==='roman'||row.section==='gothic')&&!row.value)){check.checked=false;return status('Enter numeric value first',true);}row.status=check.checked?'confirmed':'provisional';saveFamilyPlan();});
+  body.appendChild(controls);surface.appendChild(body);
+  var move=document.createElement('div');move.style.cssText='display:flex;flex-direction:column;gap:2px';
+  function arrow(symbol,offset){var btn=document.createElement('button');btn.type='button';btn.textContent=symbol;btn.style.cssText='min-height:23px;padding:2px 5px';btn.disabled=(i+offset<0||i+offset>=familyPlan.length);btn.addEventListener('click',function(){var other=familyPlan[i+offset];familyPlan[i+offset]=familyPlan[i];familyPlan[i]=other;familyPlan.forEach(function(r,j){r.priority=j;r.status='provisional';});saveFamilyPlan();renderFamilyEditor();});move.appendChild(btn);}
+  arrow('↑',-1);arrow('↓',1);surface.appendChild(move);area.appendChild(surface);
+ });
+ saveFamilyPlan();
+}
+function confirmFamilyPlan(){
+ if(!familyPlan.length)return;
+ if(!window.confirm(lang==='ru'?'Вы проверили визуально каждое заполненное семейство и его категорию/номинал?':'Have you visually checked every mapped family?'))return;
+ familyPlan.forEach(function(row){if((row.section!=='roman'&&row.section!=='gothic')||row.value)row.status='confirmed';});
+ saveFamilyPlan();renderFamilyEditor();
+}
+
 function refreshRules(){try{if(!fs||!lastFolder)return;var f=path.join(lastFolder,'constraints.json');if(!fs.existsSync(f)){$('rulesCount').textContent='0';return;}var data=JSON.parse(fs.readFileSync(f,'utf8'));$('rulesCount').textContent=Object.keys(data.items||{}).length;}catch(e){log('Constraint count: '+e.message,'WARN');}}
 function presetDir(){return path.join(root,'presets');}
 function refreshPresets(){if(!fs||!root)return;try{var dir=presetDir();fs.mkdirSync(dir,{recursive:true});var sel=$('presets'),old=sel.value;while(sel.options.length)sel.remove(0);var blank=document.createElement('option');blank.value='';blank.textContent=t('presetPlaceholder');sel.appendChild(blank);
