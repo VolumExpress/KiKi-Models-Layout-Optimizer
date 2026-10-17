@@ -85,3 +85,25 @@ def test_manifest_document_and_value_validation():
     invalid["entries"]["sym:p11-sym-003"]["value"]="3"
     with pytest.raises(ValueError,match="integer"):
         validate_manifest(invalid,"P11_synthetic.ai")
+
+
+def test_p11_number_values_override_old_editor_positions():
+    # Real P11 migration has XIV/16 assigned priority=0/1 while I=3.
+    # A number plate must not put XIV before I because of discovery order.
+    objects = [
+        {"id":"a","uuid":"a","name":"item-XIV"},
+        {"id":"b","uuid":"b","name":"item-XVI"},
+        {"id":"c","uuid":"c","name":"P11-SYM-001"},
+        {"id":"d","uuid":"d","name":"P11-SYM-002"},
+        {"id":"e","uuid":"e","name":"P11-SYM-021"}
+    ]
+    units = [{"family":x["id"],"ids":[x["id"]]} for x in objects]
+    manifest = {"schema":1,"document_name":"P11_synthetic.ai","entries":{
+       "uuid:a":{"section":"roman","value":14,"priority":0,"status":"confirmed"},
+       "uuid:b":{"section":"roman","value":16,"priority":1,"status":"confirmed"},
+       "uuid:c":{"section":"roman","value":1,"priority":3,"status":"confirmed"},
+       "uuid:d":{"section":"roman","value":2,"priority":4,"status":"confirmed"},
+       "uuid:e":{"section":"gothic","value":1,"priority":23,"status":"confirmed"}
+    }}
+    ordered,_=sort_semantic_units(units,objects,manifest,"P11_synthetic.ai")
+    assert [u["family"] for u in ordered] == ["c","d","a","b","e"]
