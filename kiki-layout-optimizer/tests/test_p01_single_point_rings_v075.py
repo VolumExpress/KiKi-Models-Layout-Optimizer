@@ -66,3 +66,15 @@ def test_input_geometry_is_never_mutated():
     before = copy.deepcopy(data)
     get_shapes(data)
     assert data == before
+
+
+def test_invalid_source_does_not_retry_all_packing_attempts(monkeypatch):
+    from kiki_layout import engine
+    calls=[]
+    def invalid(_data, **_kwargs):
+        calls.append(1)
+        raise ValueError("Object 42: Empty or degenerate closed contour")
+    monkeypatch.setattr(engine, "_layout_once", invalid)
+    with pytest.raises(ValueError, match="Object 42"):
+        engine.layout({"objects":[]}, mode="uniform", trials=8, seed=42)
+    assert len(calls)==1
