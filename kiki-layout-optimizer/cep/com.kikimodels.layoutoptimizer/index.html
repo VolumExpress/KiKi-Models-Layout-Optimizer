@@ -16,7 +16,8 @@ section{padding:9px 0;border-bottom:1px solid #424950}.pill{display:inline-block
 .help{display:inline-block;vertical-align:baseline;min-height:18px;padding:0 5px;margin-left:3px;background:#4c515a;border:1px solid #656d77}
 details{font-size:11px;background:#30363c;padding:5px 7px;border-radius:4px;margin:4px 0}details summary{cursor:pointer;color:#c2d8e7}details p{margin:5px 0}
 #progressOuter{width:100%;height:12px;background:#191d21;border-radius:5px;overflow:hidden;margin:6px 0}#progressFill{width:0;height:100%;background:#52a58b;transition:width .17s}#status{padding:7px 8px;border-left:3px solid #78a3c4;background:#202429;overflow-wrap:anywhere;white-space:pre-wrap;min-height:34px}
-#report{font-size:11px;color:#c4d2de;margin:6px 0;min-height:15px}#preview{width:100%;height:auto;max-height:380px;min-height:130px;object-fit:contain;background:#fff;border-radius:2px;border:1px solid #59646e}
+#report{font-size:11px;color:#c4d2de;margin:6px 0;min-height:15px}
+#gapNotice{padding:8px;margin:6px 0;background:#51402b;border-left:4px solid #ffc36b;color:#ffe5b7;white-space:pre-wrap;font-weight:bold}#preview{width:100%;height:auto;max-height:380px;min-height:130px;object-fit:contain;background:#fff;border-radius:2px;border:1px solid #59646e}
 #previewEmpty{background:#24282d;color:#9daaba;min-height:120px;display:flex;justify-content:center;align-items:center;text-align:center;padding:12px}
 #logs{width:100%;max-height:120px;min-height:63px;overflow-y:auto;background:#191d21;font-family:Consolas,monospace;color:#b9c8d4;font-size:10px;padding:6px;white-space:pre-wrap;overflow-wrap:anywhere}
 .hidden{display:none!important}#presets{min-width:120px;max-width:200px}.note{font-size:11px;color:#adbdc9;margin-top:7px}.help-example{display:flex;gap:7px;margin:8px 0}.help-example>div{flex:1;border:1px solid #56616b;border-radius:4px;padding:7px;min-width:0}.help-example b{font-weight:600}.help-example svg{display:block;width:100%;height:62px;margin:3px 0}.help-example em{display:block;font-size:10px;color:#aebbc6;font-style:normal}.fineprint{font-size:10px;color:#aebdca}.checkline{margin:5px 0;display:block}.checkline input{vertical-align:middle}
@@ -42,6 +43,8 @@ details{font-size:11px;background:#30363c;padding:5px 7px;border-radius:4px;marg
  <div class="fields"><div class="field"><label for="flow" data-i18n="flow">Порядок размещения</label><select id="flow"><option value="free">Свободно</option><option value="rows">Рядами</option><option value="columns">Столбцами</option></select></div>
  <div class="field"><label for="travel" data-i18n="travel">Расчёт переходов</label><select id="travel"><option value="nearest">Ближайший</option><option value="rows">По рядам</option><option value="columns">По столбцам</option><option value="source">Исходный</option></select></div>
  <div class="field"><label for="gap" data-i18n="gap">Зазор / перемычка, мм</label><input id="gap" inputmode="decimal" value="0.8"></div></div>
+ <label class="checkline"><input type="checkbox" id="adaptiveGap" style="width:auto" checked> <span data-i18n="adaptiveGapLabel">Если не помещается — подобрать меньший зазор и предупредить</span></label>
+ <div class="fineprint" data-i18n="adaptiveGapNote">Будет найден наибольший проверенный зазор в рамках поиска. Перед применением потребуется подтверждение.</div>
  <div class="fields"><div class="field wide"><label for="familyLayout" data-i18n="familyLayout">Организация семейств</label>
  <select id="familyLayout"><option value="compact">Компактная укладка</option><option value="family_first">Упорядоченные семейства</option></select></div></div>
  <label class="checkline"><input type="checkbox" id="outlineAware" style="width:auto"> <span data-i18n="outlineAware">Учитывать толщину контуров при поиске похожих серий (эксперимент)</span></label>
@@ -101,6 +104,7 @@ details{font-size:11px;background:#30363c;padding:5px 7px;border-radius:4px;marg
  <div id="progressOuter"><div id="progressFill"></div></div><div class="muted" id="stage">Ожидание</div>
  <div id="status" role="status" aria-live="polite">Готово. Экспортируйте выделение.</div>
  <div id="report"></div>
+ <div id="gapNotice" class="hidden" role="alert" aria-live="assertive"></div>
  <details id="familiesReview"><summary data-i18n="familyReviewTitle">Проверить найденные семейства</summary>
  <p data-i18n="familyReviewNote">Состав групп зависит от выбранного способа распознавания. Режим организации семейств может изменить раскладку без изменения этого списка.</p>
  <label class="checkline"><input type="checkbox" id="showFamilyIds" style="width:auto"/> <span data-i18n="showFamilyIds">Показать технические ID и исходные имена</span></label>
