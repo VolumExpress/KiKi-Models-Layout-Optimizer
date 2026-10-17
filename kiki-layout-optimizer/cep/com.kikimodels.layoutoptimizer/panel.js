@@ -195,7 +195,7 @@ function renderFamilyEditor(){
  familyPlan=currentFamilyCatalog.map(function(g,index){
   var uuids=g.members.map(function(m){return String(m.uuid||'');}).filter(Boolean);
   var matches=prior.filter(function(row){return (row.uuids||[]).some(function(u){return uuids.indexOf(String(u))>=0;});});
-  var old=matches[0];);
+  var old=matches[0];
   var fallback=null;if(!old){for(var k=0;k<g.members.length;k++){fallback=legacyLabel(g.members[k]);if(fallback)break;}}
   var codeMatch=String(g.members[0].name||'').match(/P\d{2}-SYM-\d{3}/i);
   return {key:String(g.label),uuids:uuids,
