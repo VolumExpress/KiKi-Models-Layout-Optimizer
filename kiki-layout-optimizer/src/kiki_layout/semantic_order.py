@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 _CODE = re.compile(r"(P\d{2}-SYM-\d{3})(?!\d)", re.I)
-_SECTION_RANK = {"roman": 0, "gothic": 1, "carrier": 2, "other": 3}
+_SECTION_RANK = {"roman": 0, "gothic": 1, "chapter": 2, "role": 3, "carrier": 4, "other": 5}
 
 
 def validate_manifest(manifest, document_name=None):
@@ -21,8 +21,8 @@ def validate_manifest(manifest, document_name=None):
     if document_name and declared != document_name:
         raise ValueError("Semantic manifest document_name does not match the current export")
     entries = manifest.get("entries")
-    if not isinstance(entries, dict) or not entries or len(entries) > 500:
-        raise ValueError("Semantic manifest entries must contain 1–500 mappings")
+    if not isinstance(entries, dict) or len(entries) > 1000:
+        raise ValueError("Semantic plan entries must be a mapping of at most 1000 elements")
     normalized = {}
     for raw_key, spec in entries.items():
         if not isinstance(raw_key, str) or not (
@@ -40,10 +40,13 @@ def validate_manifest(manifest, document_name=None):
             raise ValueError("Semantic value must be an integer 1–500 or null")
         if spec.get("section") in ("roman", "gothic") and value is None:
             raise ValueError("Numbered semantic entries need a numeric value")
+        priority = spec.get("priority")
+        if priority is not None and (type(priority) is not int or not 0 <= priority <= 9999):
+            raise ValueError("Semantic priority must be an integer 0–9999 or null")
         status = spec.get("status", "provisional")
         if status not in ("confirmed", "provisional"):
             raise ValueError("Semantic status must be confirmed or provisional")
-        normalized[key] = (spec["section"], value, status)
+        normalized[key] = (spec["section"], value, status, priority)
     return normalized
 
 
@@ -67,21 +70,21 @@ def sort_semantic_units(units, objects, manifest, document_name=None):
             if meta is not None:
                 tags.append(meta)
                 matched.append(oid)
-        distinct = {(section, value) for section, value, _ in tags}
+        distinct = {(section, value, priority) for section, value, _, priority in tags}
         if len(distinct) > 1:
             raise ValueError("Conflicting semantic identities inside family " + str(unit["family"]))
         if not tags:
             unresolved.append(str(unit["family"]))
             key = (len(_SECTION_RANK), 9999, seq)
         else:
-            section, value = next(iter(distinct))
+            section, value, priority = next(iter(distinct))
             status = {t[2] for t in tags}
             if "provisional" in status:
                 provisional.append(str(unit["family"]))
             if len(matched) != len(unit["ids"]):
                 partial.append(str(unit["family"]))
             resolved.append(str(unit["family"]))
-            key = (_SECTION_RANK[section], value if value is not None else 9999, seq)
+            key = (_SECTION_RANK[section], priority if priority is not None else value if value is not None else 9999, seq)
         ordered.append((key, unit))
     ordered.sort(key=lambda pair: pair[0])
     warnings = []
@@ -101,6 +104,6 @@ def sort_semantic_units(units, objects, manifest, document_name=None):
         "verified_order": "sections roman/gothic/carrier/other, then value; unmapped last",
         "warnings": warnings,
         "strict_sequence": True,
-        "source": "explicit workspace semantic_order.json (no OCR)",
+        "source": "embedded user-confirmed family plan (no OCR)",
     }
     return [unit for _, unit in ordered], audit
