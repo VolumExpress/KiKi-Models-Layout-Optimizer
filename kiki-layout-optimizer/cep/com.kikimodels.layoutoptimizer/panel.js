@@ -85,6 +85,7 @@ function options(){if($('familyLayout').value!=='compact'&&$('mode').value==='or
   if(data&&data.rows&&data.rows.length){
    var entries={};
    data.rows.forEach(function(row){
+    if((row.section==='roman'||row.section==='gothic')&&!Number.isInteger(row.value))throw Error(lang==='ru'?'В редакторе не указан номер для '+row.label:'Missing numeric value for '+row.label);
     (row.uuids||[]).forEach(function(id){
      if(!/^[\w.-]{1,128}$/.test(String(id)))throw Error('Unsafe Illustrator UUID');
      entries['uuid:'+String(id).toLowerCase()]={section:row.section,value:row.value===null?null:Number(row.value),priority:row.priority,status:row.status};
@@ -124,10 +125,10 @@ function renderFamilyAudit(){
 function familyEditorModeChanged(){
  var active=$('familyLayout').value==='semantic';
  $('semanticModeHelp').className=active?'fineprint':'fineprint hidden';
+ calcReady=false;$('apply').disabled=true;
  if(active){
   $('flow').value='rows';$('rotation').value='0';
   if($('mode').value==='ordered')$('mode').value='uniform';
-  calcReady=false;$('apply').disabled=true;
   if(currentFamilyCatalog.length)renderFamilyEditor();
  }else if($('familyEditorSection')){$('familyEditorSection').className='hidden';}
 }
@@ -193,15 +194,16 @@ function renderFamilyEditor(){
  }
  familyPlan=currentFamilyCatalog.map(function(g,index){
   var uuids=g.members.map(function(m){return String(m.uuid||'');}).filter(Boolean);
-  var old=prior.find(function(row){return (row.uuids||[]).some(function(u){return uuids.indexOf(String(u))>=0;});});
+  var matches=prior.filter(function(row){return (row.uuids||[]).some(function(u){return uuids.indexOf(String(u))>=0;});});
+  var old=matches[0];);
   var fallback=null;if(!old){for(var k=0;k<g.members.length;k++){fallback=legacyLabel(g.members[k]);if(fallback)break;}}
   var codeMatch=String(g.members[0].name||'').match(/P\d{2}-SYM-\d{3}/i);
   return {key:String(g.label),uuids:uuids,
-    label:old?old.label:(codeMatch?codeMatch[0]:((lang==='ru'?'Семейство ':'Family ')+(index+1))),
+    label:matches.length>1?'⚠ '+(old.label||'Mixed family'):old?old.label:(codeMatch?codeMatch[0]:((lang==='ru'?'Семейство ':'Family ')+(index+1))),
     section:old?old.section:fallback?fallback.section:'other',
     value:old?old.value:fallback?fallback.value:null,
     priority:old?old.priority:index,
-    status:old?old.status:fallback?fallback.status:'provisional',
+    status:(matches.length>1?'provisional':old?old.status:fallback?fallback.status:'provisional'),
     members:g.members,
     firstId:g.members[0]&&String(g.members[0].id)};
  });
