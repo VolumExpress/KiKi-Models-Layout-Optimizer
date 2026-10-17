@@ -70,6 +70,15 @@ function invoke(action){if(busy)return;if(!root){status('Missing CEP project pat
 function invokeRules(){if(busy)return;busyOn(true);status(t('processing'));var args=[root,$('lockPosition').checked,$('ruleRotation').value].map(function(v){return JSON.stringify(v);});evalHost('kikiCepRules('+args.join(',')+')',function(r){busyOn(false);if(!r)return;if(r.status==='ok'){clearPreview();refreshRules();status(t('ruleSaved'));log('Constraints updated: '+r.detail);}else status(t('failed')+': '+(r.detail||r.status),true);});}
 function number(id){var s=String($(id).value).trim().replace(',','.');var n=Number(s);if(!s||!isFinite(n)||n<0||n>100)throw Error(id+': 0–100 mm');return n;}
 function integerOption(id,lo,hi){var raw=$(id).value.trim();if(!/^-?\d+$/.test(raw))throw Error(id+': integer required');var n=Number(raw);if(!Number.isSafeInteger(n)||n<lo||n>hi)throw Error(id+': '+lo+'–'+hi);return n;}
+function hasReviewedSemanticIntent(row){
+ if(!row||row.status!=='confirmed')return false;
+ if(row.section==='roman'||row.section==='gothic')
+   return Number.isInteger(row.value)&&row.value>0&&row.value<=500;
+ if(row.section==='chapter'||row.section==='role'||row.section==='carrier')return true;
+ // Plain auto-generated "other" labels carry no semantic constraints.
+ // An explicit user edit and review are needed to enforce manual order.
+ return row.section==='other'&&row.edited===true;
+}
 function options(){if($('familyLayout').value!=='compact'&&$('mode').value==='ordered')throw Error(lang==='ru'?'Упорядоченные семейства несовместимы с режимом Ordered':'Ordered families cannot be combined with Ordered objective');var op=$('operation').value,kerf=op==='cut'?number('kerf'):0;if(op==='cut'&&kerf<=0)throw Error('Cutting requires kerf > 0');
  var o={mode:$('mode').value,gap:number('gap'),adaptive_gap:!!($('adaptiveGap')&&$('adaptiveGap').checked),margin:0,margin_left:number('margin_left'),margin_top:number('margin_top'),margin_right:number('margin_right'),margin_bottom:number('margin_bottom'),
  rotations:$('rotation').value.split(',').map(Number),families:$('families').value,family_layout:$('familyLayout').value,outline_aware:$('families').value==='auto'&&$('outlineAware').checked,flow:$('flow').value,travel_order:$('travel').value,operation:op,kerf_mm:kerf,lang:lang,
@@ -84,8 +93,11 @@ function options(){if($('familyLayout').value!=='compact'&&$('mode').value==='or
   var data=loadFamilyPlan();
   if(data&&data.rows&&data.rows.length){
    var entries={};
+   // Default automatically detected groups carry no meaningful order. They
+   // must not force strict shelving and slash a manufacturable 4.5 mm gap.
+   // Only explicitly reviewed semantics activate strict order constraints.
    data.rows.forEach(function(row){
-    if((row.section==='roman'||row.section==='gothic')&&!Number.isInteger(row.value))throw Error(lang==='ru'?'В редакторе не указан номер для '+row.label:'Missing numeric value for '+row.label);
+    if(!hasReviewedSemanticIntent(row))return;
     (row.uuids||[]).forEach(function(id){
      if(!/^[\w.-]{1,128}$/.test(String(id)))throw Error('Unsafe Illustrator UUID');
      entries['uuid:'+String(id).toLowerCase()]={section:row.section,value:row.value===null?null:Number(row.value),priority:row.priority,status:row.status};
@@ -147,13 +159,13 @@ function saveFamilyPlan(dirty){
  if(!fs||!lastFolder||!currentInput||!familyPlan.length)return;
  var doc=JSON.parse(fs.readFileSync(currentInput,'utf8')).document_name;
  var data={schema:1,document_name:doc,rows:familyPlan.map(function(row){
-  return {uuids:row.uuids.slice(),section:row.section,value:row.value,
+  return {uuids:row.uuids.slice(),edited:!!row.edited,section:row.section,value:row.value,
           priority:row.priority,status:row.status,label:row.label};
  })};
  var dest=familyPlanPath(),temp=dest+'.tmp';
  fs.writeFileSync(temp,JSON.stringify(data,null,2),'utf8');
  fs.renameSync(temp,dest);
- var count=familyPlan.filter(function(r){return r.status==='confirmed';}).length;
+ var count=familyPlan.filter(hasReviewedSemanticIntent).length;
  $('familyEditorStatus').textContent=(lang==='ru'?'Сохранено для этой пластины · подтверждено ':'Saved for this plate · confirmed ')+count+'/'+familyPlan.length;
  if(dirty){calcReady=false;$('apply').disabled=true;status(lang==='ru'?'Правила изменены: нажмите «Рассчитать» перед применением':'Family rules changed: calculate again before applying');}
 }
@@ -204,6 +216,7 @@ function renderFamilyEditor(){
     value:old?old.value:fallback?fallback.value:null,
     priority:old?old.priority:index,
     status:(matches.length>1?'provisional':old?old.status:fallback?fallback.status:'provisional'),
+    edited:old?!!old.edited:false,
     members:g.members,
     firstId:g.members[0]&&String(g.members[0].id)};
  });
@@ -220,27 +233,42 @@ function renderFamilyEditor(){
   header.textContent=row.members.length+(lang==='ru'?' размеров / экз.':' items')+' · '+row.members.map(function(m){return Number(m.equivalent_mm).toFixed(1);}).join(' / ')+' мм';
   body.appendChild(header);
   var name=document.createElement('input');name.value=row.label||'';name.title='Family label';name.style.cssText='min-width:95px;width:100%;margin:2px 0';
-  name.addEventListener('change',function(){row.label=name.value.trim().slice(0,80);row.status='provisional';saveFamilyPlan(true);});body.appendChild(name);
+  name.addEventListener('change',function(){row.label=name.value.trim().slice(0,80);row.status='provisional';row.edited=true;saveFamilyPlan(true);});body.appendChild(name);
   var controls=document.createElement('div');controls.style.cssText='display:flex;gap:3px';
   var section=document.createElement('select');section.style.cssText='width:48%;min-width:70px';
   var types=[['roman','Римские'],['gothic','Готические'],['chapter','Ордена'],['role','Роли'],['carrier','Подложки'],['other','Прочее']];
   types.forEach(function(t){var opt=document.createElement('option');opt.value=t[0];opt.textContent=t[1];section.appendChild(opt);});section.value=row.section;controls.appendChild(section);
   var value=document.createElement('input');value.type='number';value.min='1';value.max='500';value.placeholder='№';value.value=row.value===null?'':row.value;value.title='Numerical value';value.style.cssText='min-width:32px;width:26%';controls.appendChild(value);
   var check=document.createElement('input');check.type='checkbox';check.checked=row.status==='confirmed';check.title=lang==='ru'?'Номинал и семейство проверены':'Verified';check.style.cssText='width:auto';controls.appendChild(check);
-  section.addEventListener('change',function(){row.section=section.value;row.status='provisional';check.checked=false;saveFamilyPlan(true);});
-  value.addEventListener('change',function(){var n=value.value.trim();if(n&&!/^[1-9]\d{0,2}$/.test(n)){value.value='';n='';}row.value=n?Number(n):null;row.status='provisional';check.checked=false;saveFamilyPlan(true);});
+  section.addEventListener('change',function(){row.section=section.value;row.status='provisional';row.edited=true;check.checked=false;saveFamilyPlan(true);});
+  value.addEventListener('change',function(){var n=value.value.trim();if(n&&!/^[1-9]\d{0,2}$/.test(n)){value.value='';n='';}row.value=n?Number(n):null;row.status='provisional';row.edited=true;check.checked=false;saveFamilyPlan(true);});
   check.addEventListener('change',function(){if(check.checked&&((row.section==='roman'||row.section==='gothic')&&!row.value)){check.checked=false;return status('Enter numeric value first',true);}row.status=check.checked?'confirmed':'provisional';saveFamilyPlan(true);});
   body.appendChild(controls);surface.appendChild(body);
   var move=document.createElement('div');move.style.cssText='display:flex;flex-direction:column;gap:2px';
-  function arrow(symbol,offset){var btn=document.createElement('button');btn.type='button';btn.textContent=symbol;btn.style.cssText='min-height:23px;padding:2px 5px';btn.disabled=(i+offset<0||i+offset>=familyPlan.length);btn.addEventListener('click',function(){var other=familyPlan[i+offset];familyPlan[i+offset]=familyPlan[i];familyPlan[i]=other;familyPlan.forEach(function(r,j){r.priority=j;r.status='provisional';});saveFamilyPlan(true);renderFamilyEditor();});move.appendChild(btn);}
+  function arrow(symbol,offset){var btn=document.createElement('button');btn.type='button';btn.textContent=symbol;btn.style.cssText='min-height:23px;padding:2px 5px';btn.disabled=(i+offset<0||i+offset>=familyPlan.length);btn.addEventListener('click',function(){var other=familyPlan[i+offset];familyPlan[i+offset]=familyPlan[i];familyPlan[i]=other;familyPlan.forEach(function(r,j){r.priority=j;r.status='provisional';r.edited=true;});saveFamilyPlan(true);renderFamilyEditor();});move.appendChild(btn);}
   arrow('↑',-1);arrow('↓',1);surface.appendChild(move);area.appendChild(surface);
  });
  saveFamilyPlan(!saved);
 }
 function confirmFamilyPlan(){
  if(!familyPlan.length)return;
- if(!window.confirm(lang==='ru'?'Вы проверили визуально каждое заполненное семейство и его категорию/номинал?':'Have you visually checked every mapped family?'))return;
- familyPlan.forEach(function(row){if((row.section!=='roman'&&row.section!=='gothic')||row.value)row.status='confirmed';});
+ // Do not turn 13 generic P01 "other" families into fake verified semantics.
+ var eligible=familyPlan.filter(function(row){
+  return row.section!=='other'||row.edited===true;
+ }).filter(function(row){
+  return (row.section!=='roman'&&row.section!=='gothic')||Number.isInteger(row.value);
+ });
+ if(!eligible.length){
+  status(lang==='ru'
+   ?'Сначала укажите и проверьте смысловую категорию/номинал или измените порядок вручную. Автоматические «Прочее» не подтверждаются массово.'
+   :'Assign and check a category/value or manually reorder a family. Generic Other rows cannot be bulk confirmed.',true);
+  return;
+ }
+ if(!window.confirm((lang==='ru'
+  ?'Вы лично проверили '
+  :'Have you visually verified ')+eligible.length+
+  (lang==='ru'?' размеченных семейств? Остальные останутся предварительными.':' mapped families? The rest remain provisional.')))return;
+ eligible.forEach(function(row){row.status='confirmed';});
  saveFamilyPlan(true);renderFamilyEditor();
 }
 
