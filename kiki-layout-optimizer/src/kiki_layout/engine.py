@@ -16,6 +16,11 @@ from .constraints import validate_constraints, source_centre_mm
 EPS = 1e-5
 
 
+class PackingFailure(ValueError):
+    """No complete validated placement found; input data was otherwise valid."""
+
+
+
 def bounds_near(a, b, margin):
     x0,y0,x1,y1 = a.bounds
     u0,v0,u1,v1 = b.bounds
@@ -271,11 +276,11 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
     packed_families = None
     if family_layout == "family_first" and family_packing_strategy == "maxrects":
         if fixed_count or any(0 not in allowed[oid] for unit in units for oid in unit["ids"]):
-            raise ValueError("Cannot fit family with rigid-family packing constraints")
+            raise PackingFailure("Cannot fit family with rigid-family packing constraints")
         from .family_pack import pack_family_units
         packed_families = pack_family_units(units, width, height, margins, gap, seed=random_seed)
         if packed_families is None:
-            raise ValueError("Cannot fit family with rectangle-based rescue packing")
+            raise PackingFailure("Cannot fit family with rectangle-based rescue packing")
         placed = [p[0] for p in packed_families]
         transforms = [[p[1],p[2],p[3]] for p in packed_families]
     shelf_cursor=(left,top,0.)
@@ -358,7 +363,7 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
                 if best is None or score < best[0]-1e-8:
                     best=(score,cand,dx,dy,angle)
         if best is None:
-            raise ValueError(f"Cannot fit family {unit['family']!r} onto plate with gap {gap} mm")
+            raise PackingFailure(f"Cannot fit family {unit['family']!r} onto plate with gap {gap} mm")
         _,geo,dx,dy,angle=best
         placed.append(geo)
         transforms.append([dx,dy,angle])
@@ -643,7 +648,8 @@ def _solution_score(result, mode, objective_weights=None):
 
 def layout(data, *, trials=1, time_budget_sec=0., seed=42,
            contour_anchors=False, advanced_geometry=False, advanced_search=False,
-           objective_weights=None, guided_objectives=False, cut_common_line_audit=False, on_best=None, on_trial=None, progress=None, **kwargs):
+           objective_weights=None, guided_objectives=False, cut_common_line_audit=False,
+           adaptive_gap=False, strict_family=False, on_best=None, on_trial=None, progress=None, **kwargs):
     """Anytime bounded multi-start around the validated contour-safe solver.
 
     trials=1 is the exact v0.5.2 behavior (unless contour_anchors=True).
@@ -691,9 +697,8 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
     def run_safe(**call_options):
         try:
             return _layout_once(data, **call_options)
-        except ValueError as exc:
-            if (call_options.get('family_layout') != 'family_first'
-                    or 'Cannot fit family' not in str(exc)):
+        except PackingFailure as exc:
+            if call_options.get('family_layout') != 'family_first':
                 raise
             # A failed shelf pack is not proof of insufficient plate space.
             # Try conservative rigid-family rectangular nesting before
@@ -706,8 +711,9 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
                     "Family-first shelf placement failed; bounded rectangle packing "
                     "kept every family intact. Visual section order may differ; review preview.")
                 return rescued, rescued_shapes
-            except ValueError:
-                pass
+            except PackingFailure:
+                if strict_family:
+                    raise
             # Family-first is an aesthetic preference, never a reason to lose
             # an otherwise possible, fully validated layout. Make the fallback
             # transparent to the user; NEVER claim the result is family-first.
@@ -739,7 +745,7 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
     # a denser compact fallback must not beat any valid family-first candidate.
     wants_families=kwargs.get("family_layout")=="family_first"
     best_kept_families=False
-    records=[]; failed=[]
+    records=[]; failed=[]; nonpacking_failed=False
     for trial in range(trials):
         if trial and budget and time.monotonic()-start >= budget:
             break
@@ -772,6 +778,8 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
                         if guided_objectives and normalized is not None and mode != 'ordered' and kwargs.get('flow','free') == 'free'
                         else None), **kwargs)
         except ValueError as exc:
+            if not isinstance(exc, PackingFailure):
+                nonpacking_failed=True
             failed.append({'trial':trial+1,'reason':str(exc)})
             if progress: progress('searching',(trial+1)*1000,trials*1000)
             continue
@@ -794,7 +802,8 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
             if on_best: on_best(finish(best,include_cut_audit=False),best_geometry)
         if progress: progress('searching',(trial+1)*1000,trials*1000)
     if best is None:
-        raise ValueError('No feasible trial: '+('; '.join(x['reason'] for x in failed[:3]) or 'unknown error'))
+        failure_type = ValueError if nonpacking_failed else PackingFailure
+        raise failure_type('No feasible trial: '+('; '.join(x['reason'] for x in failed[:3]) or 'unknown error'))
     elapsed=time.monotonic()-start
     best['report']['search']={'guided_objectives':guided_objectives,'requested_trials':trials,
             'family_first_requested':wants_families,
