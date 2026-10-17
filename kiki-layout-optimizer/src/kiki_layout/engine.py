@@ -16,6 +16,11 @@ from .constraints import validate_constraints, source_centre_mm
 EPS = 1e-5
 
 
+class PackingFailure(ValueError):
+    """No complete validated placement found; input data was otherwise valid."""
+
+
+
 def bounds_near(a, b, margin):
     x0,y0,x1,y1 = a.bounds
     u0,v0,u1,v1 = b.bounds
@@ -122,9 +127,11 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
            rotations=(0,), families="off", family_threshold=0.97, outline_aware=False,
            width=None, height=None, refine=True, progress=None,
            operation="engrave", kerf_mm=0.0, constraints=None,
-           order_strategy="baseline", random_seed=42, contour_anchors=False, candidate_policy="default", advanced_geometry=False, advanced_search=False, search_weights=None, family_layout="compact"):
+           order_strategy="baseline", random_seed=42, contour_anchors=False, candidate_policy="default", advanced_geometry=False, advanced_search=False, search_weights=None, family_layout="compact", family_width_fraction=0.55, family_packing_strategy="shelf"):
     if family_layout not in ("compact", "family_first"):
         raise ValueError("family_layout must be compact or family_first")
+    if family_packing_strategy not in ("shelf", "maxrects"):
+        raise ValueError("Unknown family packing strategy")
     if family_layout == "family_first" and mode == "ordered":
         raise ValueError("Family-first placement conflicts with strict Ordered mode")
     if operation not in ("engrave", "cut"):
@@ -203,7 +210,12 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
             members.append({'id':oid,'name':ob.get('name',''),
                 'equivalent_mm':round(math.sqrt((x1-x0)*(y1-y0)),2)})
         family_audit.append({'label':label,'members':members})
-    units=build_units(objects,shapes,labels,gap,max_group_width=max(20.,(width-left-right)*0.55))
+    # Alternative family wraps are explored by multi-start without resizing any emblem.
+    # The compact legacy algorithm retains its exact previous group width.
+    width_fraction=family_width_fraction if family_layout=="family_first" else 0.55
+    if not (0.20 <= width_fraction <= 0.75):
+        raise ValueError("Internal family width fraction out of range")
+    units=build_units(objects,shapes,labels,gap,max_group_width=max(20.,(width-left-right)*width_fraction))
 
     # v0.7.2: optional user-directed family-first sequencing.
     # Never change the default compact algorithm.
@@ -257,12 +269,26 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
         placed.append(fixed_geometry)
         transforms.append([fx,fy,0])
     fixed_count=len(placed)
+    # If the greedy shelf strategy failed in a prior call, try a bounded
+    # MaxRects-style packing of intact, unrotated family units. This is only
+    # a rescue path: locked objects or 0-degree rotation restrictions keep
+    # their original solver and its existing safe fallback.
+    packed_families = None
+    if family_layout == "family_first" and family_packing_strategy == "maxrects":
+        if fixed_count or any(0 not in allowed[oid] for unit in units for oid in unit["ids"]):
+            raise PackingFailure("Cannot fit family with rigid-family packing constraints")
+        from .family_pack import pack_family_units
+        packed_families = pack_family_units(units, width, height, margins, gap, seed=random_seed)
+        if packed_families is None:
+            raise PackingFailure("Cannot fit family with rectangle-based rescue packing")
+        placed = [p[0] for p in packed_families]
+        transforms = [[p[1],p[2],p[3]] for p in packed_families]
     shelf_cursor=(left,top,0.)
     previous_style=None
     shelf_fallbacks=0
     units=fixed_units+units
     update("placing", 0, len(units)-fixed_count)
-    for unit_index, unit in enumerate(units[fixed_count:]):
+    for unit_index, unit in enumerate([] if packed_families is not None else units[fixed_count:]):
         best=None
         permitted=set(allowed[unit['ids'][0]])
         for oid in unit['ids'][1:]: permitted.intersection_update(allowed[oid])
@@ -337,7 +363,7 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
                 if best is None or score < best[0]-1e-8:
                     best=(score,cand,dx,dy,angle)
         if best is None:
-            raise ValueError(f"Cannot fit family {unit['family']!r} onto plate with gap {gap} mm")
+            raise PackingFailure(f"Cannot fit family {unit['family']!r} onto plate with gap {gap} mm")
         _,geo,dx,dy,angle=best
         placed.append(geo)
         transforms.append([dx,dy,angle])
@@ -559,6 +585,8 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
     report={"object_count":len(ids),"cluster_count":len(units),
             "family_audit":family_audit,
             "family_layout": {"mode":family_layout,"shelf_fallbacks":shelf_fallbacks,
+                              "unit_width_fraction":round(width_fraction,3),
+                              "packing_strategy":family_packing_strategy if family_layout=="family_first" else "legacy",
                               "description":"Visual-style ordered rigid families on compact shelves" if family_layout=="family_first" else "Legacy compact geometry"},
             "pair_count":len(pairwise),
             "locked_count":len(locked_ids),
@@ -620,7 +648,8 @@ def _solution_score(result, mode, objective_weights=None):
 
 def layout(data, *, trials=1, time_budget_sec=0., seed=42,
            contour_anchors=False, advanced_geometry=False, advanced_search=False,
-           objective_weights=None, guided_objectives=False, cut_common_line_audit=False, on_best=None, on_trial=None, progress=None, **kwargs):
+           objective_weights=None, guided_objectives=False, cut_common_line_audit=False,
+           adaptive_gap=False, strict_family=False, on_best=None, on_trial=None, progress=None, **kwargs):
     """Anytime bounded multi-start around the validated contour-safe solver.
 
     trials=1 is the exact v0.5.2 behavior (unless contour_anchors=True).
@@ -629,6 +658,54 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
     Best-so-far can be checkpointed through on_best after every full validation.
     No guarantee of a global optimum or improvement in every individual metric.
     """
+    if type(adaptive_gap) is not bool or type(strict_family) is not bool:
+        raise ValueError("Adaptive and strict family policy flags must be booleans")
+    if adaptive_gap:
+        from .gap_policy import optimize_gap
+        wanted = float(kwargs.get("gap", 0.8))
+        is_family = kwargs.get("family_layout") == "family_first"
+
+        def candidate_solver(candidate_gap, discovery):
+            opts = dict(kwargs, gap=candidate_gap)
+            # Speculative layouts must never become applicable checkpoints.
+            return layout(data, trials=1 if discovery else trials,
+                time_budget_sec=0 if discovery else time_budget_sec,
+                seed=seed, contour_anchors=contour_anchors,
+                advanced_geometry=advanced_geometry, advanced_search=advanced_search,
+                objective_weights=objective_weights, guided_objectives=guided_objectives,
+                cut_common_line_audit=cut_common_line_audit, adaptive_gap=False,
+                strict_family=is_family, on_best=None, on_trial=None,
+                progress=progress if not discovery else None, **opts)
+
+        found, achieved, adjustment = optimize_gap(
+            wanted, candidate_solver, PackingFailure,
+            seconds=float(time_budget_sec), progress=progress)
+        if found is None:
+            # If not even a reduced rigid-family layout is available, preserve
+            # the existing labelled compact fallback at the REQUESTED gap.
+            result, shapes = layout(data, trials=trials,
+                time_budget_sec=time_budget_sec, seed=seed,
+                contour_anchors=contour_anchors, advanced_geometry=advanced_geometry,
+                advanced_search=advanced_search, objective_weights=objective_weights,
+                guided_objectives=guided_objectives,
+                cut_common_line_audit=cut_common_line_audit, adaptive_gap=False,
+                strict_family=False, on_best=None, on_trial=None, progress=None,
+                **kwargs)
+            adjustment.update({"used_mm": float(result["settings"]["gap_mm"]),
+                               "reduced": False, "family_fallback": is_family})
+        else:
+            result, shapes = found
+        result["report"]["gap_adjustment"] = adjustment
+        result["settings"]["requested_gap_mm"] = wanted
+        if adjustment.get("reduced"):
+            actual = adjustment["used_mm"]
+            result["report"]["warnings"].append(
+                f"Requested gap {wanted:.3f} mm could not be achieved in the chosen "
+                f"layout; verified result uses {actual:.3f} mm. Review before applying.")
+        if on_best:
+            on_best(result, shapes)
+        return result, shapes
+
     if isinstance(trials,bool) or not isinstance(trials,int) or not 1 <= trials <= 30:
         raise ValueError("trials must be an integer from 1 to 30")
     if isinstance(seed,bool) or not isinstance(seed,int) or not -2**31 <= seed <= 2**31-1:
@@ -668,10 +745,23 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
     def run_safe(**call_options):
         try:
             return _layout_once(data, **call_options)
-        except ValueError as exc:
-            if (call_options.get('family_layout') != 'family_first'
-                    or 'Cannot fit family' not in str(exc)):
+        except PackingFailure as exc:
+            if call_options.get('family_layout') != 'family_first':
                 raise
+            # A failed shelf pack is not proof of insufficient plate space.
+            # Try conservative rigid-family rectangular nesting before
+            # dropping the user-requested ordered-family preference.
+            rescued_options = dict(call_options, family_packing_strategy="maxrects")
+            try:
+                rescued, rescued_shapes = _layout_once(data, **rescued_options)
+                rescued["report"]["family_layout"]["shelf_failure_reason"] = str(exc)
+                rescued["report"]["warnings"].append(
+                    "Family-first shelf placement failed; bounded rectangle packing "
+                    "kept every family intact. Visual section order may differ; review preview.")
+                return rescued, rescued_shapes
+            except PackingFailure:
+                if strict_family:
+                    raise
             # Family-first is an aesthetic preference, never a reason to lose
             # an otherwise possible, fully validated layout. Make the fallback
             # transparent to the user; NEVER claim the result is family-first.
@@ -699,7 +789,11 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
     start=time.monotonic()
     mode=kwargs.get('mode','uniform')
     best=None; best_geometry=None; best_score=math.inf; best_trial=None
-    records=[]; failed=[]
+    # The requested family layout is a hard selection priority across trials;
+    # a denser compact fallback must not beat any valid family-first candidate.
+    wants_families=kwargs.get("family_layout")=="family_first"
+    best_kept_families=False
+    records=[]; failed=[]; nonpacking_failed=False
     for trial in range(trials):
         if trial and budget and time.monotonic()-start >= budget:
             break
@@ -707,6 +801,9 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
         if trial >= 4: variant='shuffled'
         if mode=='ordered': variant='baseline'
         policy = ('default', 'balanced', 'footprint')[trial % 3] if mode=='ordered' else 'default'
+        # Groups keep all members and physical sizes, but may wrap at different
+        # widths. Exploring both narrow and wide groups resolves greedy dead ends.
+        family_fraction=(.55,.40,.32,.65,.48,.28,.58,.36)[trial % 8] if wants_families else .55
         def nested_progress(stage, done, total):
             if progress:
                 weights={'preparing':0,'placing':.05,'refining':.85,'compacting':.95,'validating':.98,'complete':1.0}
@@ -718,6 +815,7 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
         try:
             result, shapes = run_safe(progress=nested_progress,
                     order_strategy=variant,random_seed=seed+trial*17,
+                    family_width_fraction=family_fraction,
                     contour_anchors=contour_anchors, advanced_geometry=advanced_geometry, advanced_search=advanced_search,
                     candidate_policy=policy, search_weights=(
                         # The weighted policy plus 3 pure objective directions
@@ -728,26 +826,36 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
                         if guided_objectives and normalized is not None and mode != 'ordered' and kwargs.get('flow','free') == 'free'
                         else None), **kwargs)
         except ValueError as exc:
+            if not isinstance(exc, PackingFailure):
+                nonpacking_failed=True
             failed.append({'trial':trial+1,'reason':str(exc)})
             if progress: progress('searching',(trial+1)*1000,trials*1000)
             continue
         score=_solution_score(result,mode,objective_weights)
         if on_trial is not None: on_trial(trial+1, result, shapes)
+        kept_families=result['report']['family_layout']['mode']=='family_first'
         records.append({'trial':trial+1,'strategy':variant,'score':round(score,7),
+                        'layout_mode':result['report']['family_layout']['mode'],
+                        'family_width_fraction':round(family_fraction,3),
                         'bbox_mm2':result['report']['occupied_bbox_mm2'],
                         'nearest_3_stdev_mm':result['report']['nearest_3_stdev_mm'],
                         'metrics':metric_vector(result),
                         'travel_mm':result['report']['travel_proxy']['travel_total_mm'],
                         'construction_goal':('weighted' if trial % 5 in (0,4) else ('area','spacing','travel')[(trial-1)%3])
                            if guided_objectives and normalized is not None and mode!='ordered' and kwargs.get('flow','free')=='free' else 'baseline'})
-        if score < best_score-1e-10:
+        if (best is None or (kept_families and not best_kept_families)
+                or (kept_families == best_kept_families and score < best_score-1e-10)):
             best,best_geometry,best_score,best_trial=result,shapes,score,trial+1
+            best_kept_families=kept_families
             if on_best: on_best(finish(best,include_cut_audit=False),best_geometry)
         if progress: progress('searching',(trial+1)*1000,trials*1000)
     if best is None:
-        raise ValueError('No feasible trial: '+('; '.join(x['reason'] for x in failed[:3]) or 'unknown error'))
+        failure_type = ValueError if nonpacking_failed else PackingFailure
+        raise failure_type('No feasible trial: '+('; '.join(x['reason'] for x in failed[:3]) or 'unknown error'))
     elapsed=time.monotonic()-start
     best['report']['search']={'guided_objectives':guided_objectives,'requested_trials':trials,
+            'family_first_requested':wants_families,
+            'family_first_preserved':best_kept_families if wants_families else None,
             'completed_trials':len(records),'failed_trials':failed,
             'best_trial':best_trial,'seed':seed,'time_budget_sec':budget,
             'elapsed_sec':round(elapsed,3),'score':round(best_score,6),

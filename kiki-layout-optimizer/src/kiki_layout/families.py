@@ -123,7 +123,7 @@ def build_units(objects, shapes, labels, gap, max_group_width):
             x0, y0, x1, y1 = geom.bounds
             width, height = x1 - x0, y1 - y0
             if x and x + width > max_group_width:
-                x, row_y, row_h = 0.0, row_y + row_h + gap, 0.0
+                x, row_y, row_h = 0.0, row_y + max(row_h, max_h if row_y == 0 else 0.0) + gap, 0.0
             dx = x - x0
             dy = row_y - y0 + (max_h - height) / 2 if row_y == 0 else row_y - y0
             translated.append(translate(geom, dx, dy))
