@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-_CODE = re.compile(r"\b(P\d{2}-SYM-\d{3})\b", re.I)
+_CODE = re.compile(r"(P\d{2}-SYM-\d{3})(?!\d)", re.I)
 _SECTION_RANK = {"roman": 0, "gothic": 1, "carrier": 2, "other": 3}
 
 
