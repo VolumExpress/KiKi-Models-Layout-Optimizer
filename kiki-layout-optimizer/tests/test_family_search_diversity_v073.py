@@ -75,4 +75,7 @@ def test_legacy_compact_multi_start_is_unmodified():
     explicit, _ = engine.layout(source, mode='uniform', families='named',
                                 family_layout='compact',
                                 flow='rows', gap=1, margin=2, trials=2)
+    # Wall-clock timings are intentionally nondeterministic across CI runners.
+    default["report"]["search"].pop("elapsed_sec", None)
+    explicit["report"]["search"].pop("elapsed_sec", None)
     assert default == explicit
