@@ -34,7 +34,7 @@ def test_adaptive_search_finds_largest_verified_candidate():
         return {'verified': gap}, None
     solution, actual, audit = optimize_gap(
         4.5, solve, PackingFailure, seconds=0, precision_mm=.02)
-    assert solution['verified'] == actual
+    assert solution[0]['verified'] == actual
     assert 3.20 <= actual <= 3.225
     assert audit['requested_mm'] == 4.5
     assert audit['reduced'] is True
