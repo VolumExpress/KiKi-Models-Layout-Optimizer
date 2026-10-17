@@ -14,8 +14,8 @@ from .gui_jobs import calculate
 
 ALLOWED = {"mode", "gap", "margin", "margin_left", "margin_top", "margin_right",
            "margin_bottom", "rotations", "families", "flow", "travel_order",
-           "operation", "kerf_mm", "lang", "trials", "time_budget_sec", "seed", "contour_anchors", "advanced_geometry", "advanced_search", "objective_weights", "guided_objectives", "cut_common_line_audit", "family_layout", "outline_aware"}
-STAGES = {"searching": (3, 95), "compacting": (92, 97), "preparing": (0, 3), "placing": (3, 80), "refining": (80, 92),
+           "operation", "kerf_mm", "lang", "trials", "time_budget_sec", "seed", "contour_anchors", "advanced_geometry", "advanced_search", "objective_weights", "guided_objectives", "cut_common_line_audit", "family_layout", "outline_aware", "adaptive_gap"}
+STAGES = {"gap_search": (3, 97), "searching": (3, 95), "compacting": (92, 97), "preparing": (0, 3), "placing": (3, 80), "refining": (80, 92),
           "validating": (97, 99), "complete": (99, 99)}
 
 
@@ -40,6 +40,8 @@ def parse_request(path: Path):
     options["rotations"] = tuple(options["rotations"])
     if options.get("family_layout", "compact") not in ("compact","family_first"):
         raise ValueError("Invalid family layout policy")
+    if "adaptive_gap" in options and type(options["adaptive_gap"]) is not bool:
+        raise ValueError("adaptive_gap must be boolean")
     if "outline_aware" in options and type(options["outline_aware"]) is not bool:
         raise ValueError("outline_aware must be boolean")
     if "trials" in options and (type(options["trials"]) is not int or not 1 <= options["trials"] <= 30):
@@ -86,6 +88,7 @@ def run(path: Path):
         "advanced_search":report.get("advanced_search",{}),
         "family_audit":report.get("family_audit",[]),
         "family_layout":report.get("family_layout",{}),
+        "gap_adjustment":report.get("gap_adjustment",{}),
         "warnings":report.get("warnings", []),
         "multiobjective": report.get("multiobjective",{}),
         "pareto_frontier":report.get("search",{}).get("pareto_solutions",[]),
