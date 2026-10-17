@@ -58,7 +58,7 @@ def test_rescue_precedes_compact_fallback(monkeypatch):
         method = options.get('family_packing_strategy', 'shelf')
         called.append((mode, method))
         if mode == 'family_first' and method == 'shelf':
-            raise ValueError("Cannot fit family synthetic")
+            raise engine.PackingFailure("Cannot fit family synthetic")
         return real(data, **options)
 
     monkeypatch.setattr(engine, '_layout_once', force_shelf_failure)
@@ -79,7 +79,7 @@ def test_rescue_does_not_violate_rotation_constraints(monkeypatch):
 
     def force_shelf_failure(data, **options):
         if options.get('family_layout') == 'family_first' and options.get('family_packing_strategy') != 'maxrects':
-            raise ValueError("Cannot fit family synthetic")
+            raise engine.PackingFailure("Cannot fit family synthetic")
         return real(data, **options)
 
     monkeypatch.setattr(engine, '_layout_once', force_shelf_failure)
