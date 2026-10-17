@@ -84,7 +84,13 @@ def sort_semantic_units(units, objects, manifest, document_name=None):
             if len(matched) != len(unit["ids"]):
                 partial.append(str(unit["family"]))
             resolved.append(str(unit["family"]))
-            key = (_SECTION_RANK[section], priority if priority is not None else value if value is not None else 9999, seq)
+            # Numerical series are ALWAYS ordered by their actual value.
+            # Family-editor priority orders nonnumeric sections; it must not
+            # override I, II, III… or Gothic 1, 2, 3… (P11 regression).
+            if section in ("roman", "gothic"):
+                key = (_SECTION_RANK[section], value, priority if priority is not None else seq, seq)
+            else:
+                key = (_SECTION_RANK[section], priority if priority is not None else value if value is not None else 9999, seq, seq)
         ordered.append((key, unit))
     ordered.sort(key=lambda pair: pair[0])
     warnings = []
