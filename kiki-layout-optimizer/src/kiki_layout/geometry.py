@@ -32,6 +32,34 @@ def as_polygon(points):
     return poly
 
 
+def is_single_point_ring(ring):
+    """Only the exact Illustrator sampling artefact: >=3 identical points.
+
+    Do NOT discard narrow loops, two-anchor Bezier lenses, or arbitrary
+    self-intersections, which can carry real geometry.
+    """
+    return (isinstance(ring, list) and len(ring) >= 3
+            and all(p == ring[0] for p in ring))
+
+
+def duplicate_point_ring_audit(data):
+    """List ignored strictly zero-area single-point rings with source IDs."""
+    findings = []
+    def visit(node, oid, location):
+        kind = node.get("type")
+        if kind == "compound":
+            for index, ring in enumerate(node.get("rings", [])):
+                if is_single_point_ring(ring):
+                    findings.append({"object_id": oid,
+                                     "contour": location + f".rings[{index}]"})
+        elif kind == "group":
+            for index, child in enumerate(node.get("children", [])):
+                visit(child, oid, location + f".children[{index}]")
+    for obj in data.get("objects", []):
+        visit(obj["geometry"], str(obj["id"]), "geometry")
+    return findings
+
+
 def from_tree(node):
     kind = node.get("type")
     if kind == "path":
@@ -68,6 +96,13 @@ def from_tree(node):
         # require a future fill-rule-aware implementation.
         geom = GeometryCollection()
         for ring in node.get("rings", []):
+            # Illustrator sometimes exports a three-point closed contour that
+            # repeats the same coordinate three times. It has exactly zero
+            # filled area, so it is mathematically neutral to even/odd fill.
+            # Only this provably empty case is ignored; all other invalid
+            # rings still fail loudly.
+            if is_single_point_ring(ring):
+                continue
             geom = geom.symmetric_difference(as_polygon(ring))
         return geom
     if kind == "group":
@@ -85,7 +120,10 @@ def get_shapes(data):
         oid = str(ob["id"])
         if oid in found:
             raise ValueError(f"Duplicate object ID: {oid}")
-        geom = from_tree(ob["geometry"])
+        try:
+            geom = from_tree(ob["geometry"])
+        except ValueError as exc:
+            raise ValueError(f"Object {oid}: {exc}") from exc
         if geom.is_empty or geom.area < 1e-6:
             raise ValueError(f"Empty geometry for object {oid}")
         found[oid] = geom
