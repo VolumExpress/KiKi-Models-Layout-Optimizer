@@ -24,7 +24,10 @@ def as_polygon(points):
     poly = Polygon(points)
     if not poly.is_valid:
         poly = poly.buffer(0)
-    if poly.is_empty or poly.area < 1e-7:
+    # Positive-area micro-contours (e.g. tiny filled Bezier loops) are valid artwork.
+    # Do not discard them due to an arbitrary per-ring area threshold.
+    # A minimum area for the complete movable object is checked in get_shapes().
+    if poly.is_empty or poly.area <= 0:
         raise ValueError("Empty or degenerate closed contour")
     return poly
 
