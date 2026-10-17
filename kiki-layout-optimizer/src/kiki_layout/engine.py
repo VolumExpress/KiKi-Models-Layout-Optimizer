@@ -857,7 +857,11 @@ def layout(data, *, trials=1, time_budget_sec=0., seed=42,
                         else None), **kwargs)
         except ValueError as exc:
             if not isinstance(exc, PackingFailure):
-                nonpacking_failed=True
+                # Invalid input geometry, metadata or settings are invariant
+                # across all randomized packing trials. Fail immediately,
+                # instead of wasting 8 attempts and reporting a bogus
+                # 'No feasible trial' packing result.
+                raise
             failed.append({'trial':trial+1,'reason':str(exc)})
             if progress: progress('searching',(trial+1)*1000,trials*1000)
             continue
