@@ -5,7 +5,7 @@
 'use strict';
 var root=window.KIKI_PROJECT_ROOT||'';
 var lang='ru', busy=false, child=null, currentInput='',lastFolder='',currentPreview='plate';
-var fs=null,path=null,spawn=null,BufferCtor=null,paretoTrial=null,currentGapAdjustment=null,currentSemanticAudit=null,currentFamilyCatalog=[],familyPlan=[];
+var fs=null,path=null,spawn=null,BufferCtor=null,paretoTrial=null,currentGapAdjustment=null,currentSemanticAudit=null,currentFamilyCatalog=[],familyPlan=[],familyGroupingEdited=false,selectedFamilyMerge={};
 var $=function(id){return document.getElementById(id);};
 var translations={
 ru:{outlineMatchContext:'Дополнительное сопоставление работает только при группировке «По силуэту».',workflowHelp:'Быстрый старт',workflowDescription:'Выделите эмблемы на холсте Illustrator → экспортируйте → выберите настройки → рассчитайте → проверьте результат → примените. После правки контуров экспортируйте повторно. Работайте с копией .ai.',operationHelp:'Как выбрать технологию?',operationDescription:'Гравировка — расположение изображений с заданным зазором. Резка — разнос отдельных деталей с учётом ширины пропила; это не готовая программа станка.',rotationHelp:'Какие повороты безопасны?',rotationDescription:'0° сохраняет ориентацию. При 90° или 180° цифры, стрелки и направленные эмблемы могут изменить смысл. Для отдельных объектов задавайте свои ограничения ниже.',clearanceHelp:'Что означают зазор и поля?',clearanceDescription:'Зазор — минимальная дистанция между отдельными эмблемами; поля — отступ до краёв пластины. Для резки дополнительно учитывается ширина пропила. Единицы — мм.',rulesHelp:'Как закреплять объекты?',rulesDescription:'Экспортируйте всю пластину, затем выделите нужные эмблемы в Illustrator, задайте фиксацию или повороты и сохраните ограничения. После изменения самих контуров выполните новый экспорт.',presetHelp:'Что сохраняет пресет?',presetDescription:'Пресет содержит режим, интервалы, поля, углы и параметры поиска, но не изображения и не правила фиксации отдельных объектов.',familyReviewNote:'Здесь показано, какие объекты распознаны как одно семейство. Упорядоченная раскладка может выглядеть иначе при совершенно том же составе семейств.',showFamilyIds:'Показать технические ID и исходные имена',compactExample:'Компактно',compactExampleNote:'Приоритет плотности',orderedExample:'Сериями',orderedExampleNote:'Приоритет порядка размеров',guidedObjectives:'Эксперимент: веса управляют поиском позиций (может ухудшить результат)',paretoTitle:'Другие допустимые варианты',paretoNote:'Другие проверенные варианты отличаются плотностью и равномерностью. Только просмотр: применить можно лишь итоговую раскладку, выбранную расчётом.',paretoShow:'Показать альтернативу',objectivePreset:'Готовый профиль',multiTitle:'Приоритеты раскладки',multiEnabled:'Выбирать лучший по трём критериям',areaWeight:'Плотность (0–10)',spacingWeight:'Равномерность (0–10)',travelWeight:'Переходы (0–10)',multiNote:'По умолчанию веса выбирают лучший из рассчитанных вариантов. Влияние весов на сам поиск включается отдельно и остаётся экспериментальным. Переходы — оценка, не время станка.',commonLineLabel:'Аудит совпадающих линий в исходном макете',commonLineNote:'Только диагностика: не объединяет контуры и не создаёт маршрут резки. Требуется проверка в CAM.',subtitle:'Оптимизация раскладки',export:'Экспорт выделения',calculate:'Рассчитать',apply:'Применить',
@@ -92,6 +92,12 @@ function options(){if($('familyLayout').value!=='compact'&&$('mode').value==='or
   if(!lastFolder||!fs||!path)throw Error('Export the plate first');
   var data=loadFamilyPlan();
   if(data&&data.rows&&data.rows.length){
+   if(data.manual_grouping===true&&data.rows.some(function(row){
+       return (row.section==='roman'||row.section==='gothic')&&row.status!=='confirmed';})){
+     throw Error(lang==='ru'
+       ?'После объединения/разделения числового семейства проверьте и подтвердите его номинал, затем пересчитайте.'
+       :'After changing numeric family membership, verify and confirm its value before calculation.');
+   }
    var entries={};
    // Default automatically detected groups carry no meaningful order. They
    // must not force strict shelving and slash a manufacturable 4.5 mm gap.
@@ -104,6 +110,11 @@ function options(){if($('familyLayout').value!=='compact'&&$('mode').value==='or
     });
    });
    if(Object.keys(entries).length)o.semantic_map={schema:1,document_name:data.document_name,entries:entries};
+   if(data.manual_grouping===true){
+    // Complete group partition; identity is UUID, NEVER a guessed silhouette.
+    var allGroups=data.rows.map(function(row,i){return {id:'manual_'+i,uuids:row.uuids};});
+    o.family_overrides={schema:1,document_name:data.document_name,groups:allGroups};
+   }
   }
  }
  return o;}
@@ -114,7 +125,7 @@ function familyMatchingVisibility(){var disabled=$('families').value!=='auto';$(
 function operationVisibility(){$('kerfWrap').style.display=$('operation').value==='cut'?'block':'none';$('cutAuditWrap').style.display=$('operation').value==='cut'?'block':'none';}
 function percent(stage,done,total){var ranges={searching:[3,95],preparing:[0,3],placing:[3,80],refining:[80,92],compacting:[92,97],validating:[97,99],complete:[99,99]};var a=ranges[stage]||[0,0];return Math.max(0,Math.min(99,Math.floor(a[0]+(a[1]-a[0])*done/Math.max(total,1))));}
 function bar(value,stage,done,total){$('progressFill').style.width=value+'%';$('stage').textContent=(t('stages')[stage]||stage)+' ('+done+'/'+total+') — '+value+'%';}
-function clearPreview(){paretoTrial=null;currentSemanticAudit=null;currentFamilyCatalog=[];familyPlan=[];if($('familyEditorSection'))$('familyEditorSection').className='hidden';if($('semanticNotice')){$('semanticNotice').className='hidden';$('semanticNotice').textContent='';}currentGapAdjustment=null;if($('gapNotice')){$('gapNotice').className='hidden';$('gapNotice').textContent='';}if($('paretoSelect')){$('paretoSelect').innerHTML='<option value="">—</option>';$('paretoSummary').textContent='';}calcReady=false;$('apply').disabled=true;$('preview').removeAttribute('src');$('preview').className='hidden';$('previewEmpty').className='';$('report').textContent='';$('familyReviewContent').textContent='';currentFamilyAudit=[];$('progressFill').style.width='0%';}
+function clearPreview(){paretoTrial=null;currentSemanticAudit=null;currentFamilyCatalog=[];familyPlan=[];familyGroupingEdited=false;selectedFamilyMerge={};if($('familyEditorSection'))$('familyEditorSection').className='hidden';if($('semanticNotice')){$('semanticNotice').className='hidden';$('semanticNotice').textContent='';}currentGapAdjustment=null;if($('gapNotice')){$('gapNotice').className='hidden';$('gapNotice').textContent='';}if($('paretoSelect')){$('paretoSelect').innerHTML='<option value="">—</option>';$('paretoSummary').textContent='';}calcReady=false;$('apply').disabled=true;$('preview').removeAttribute('src');$('preview').className='hidden';$('previewEmpty').className='';$('report').textContent='';$('familyReviewContent').textContent='';currentFamilyAudit=[];$('progressFill').style.width='0%';}
 function showPreview(kind){currentPreview=kind;if(!lastFolder||!safeRoot()){status(t('noInput'),true);return;}var f=path.join(lastFolder,kind==='route'?'route_test.svg':kind==='best'?'best_so_far.svg':kind==='pareto'?path.join('alternatives','trial_'+String(paretoTrial).padStart(2,'0')+'.svg'):'preview_test.svg');try{
  if(!fs.existsSync(f))throw Error('Preview not found: '+f);if(fs.statSync(f).size>8*1024*1024)throw Error('SVG preview too large');
  var svg=fs.readFileSync(f);$('preview').src='data:image/svg+xml;base64,'+svg.toString('base64');$('preview').className='';$('previewEmpty').className='hidden';
@@ -158,7 +169,7 @@ function loadFamilyPlan(){
 function saveFamilyPlan(dirty){
  if(!fs||!lastFolder||!currentInput||!familyPlan.length)return;
  var doc=JSON.parse(fs.readFileSync(currentInput,'utf8')).document_name;
- var data={schema:1,document_name:doc,rows:familyPlan.map(function(row){
+ var data={schema:1,document_name:doc,manual_grouping:!!familyGroupingEdited,rows:familyPlan.map(function(row){
   return {uuids:row.uuids.slice(),edited:!!row.edited,section:row.section,value:row.value,
           priority:row.priority,status:row.status,label:row.label};
  })};
@@ -189,12 +200,13 @@ function familyThumbnail(item){
  polygons.forEach(function(g){var d='';g.p.forEach(function(q,i){d+=(i?'L':'M')+Number(q[0]).toFixed(4)+' '+Number(q[1]).toFixed(4)+' ';});if(g.close)d+='Z';svg+='<path d="'+d+'" fill="'+(g.close?'#89a7c0':'none')+'" fill-rule="evenodd" stroke="#e0e9f4" stroke-width="'+Math.max(wx,wy)/110+'"/>';});
  svg+='</svg>';return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
 }
-function renderFamilyEditor(){
- if(!$('familyEditorSection')||!currentInput||!currentFamilyCatalog.length)return;
+function renderFamilyEditor(useCurrent){
+ if(!$('familyEditorSection')||!currentInput||(!currentFamilyCatalog.length&&!familyPlan.length))return;
  if($('familyLayout').value!=='semantic'){$('familyEditorSection').className='hidden';return;}
  var input=JSON.parse(fs.readFileSync(currentInput,'utf8')),byId={};
  (input.objects||[]).forEach(function(x){byId[String(x.id)]=x;});
- var saved=loadFamilyPlan(),prior=saved?saved.rows:[];
+ var saved=useCurrent?null:loadFamilyPlan(),prior=saved?saved.rows:[];
+ if(!useCurrent)familyGroupingEdited=!!(saved&&saved.manual_grouping);
  var legacy=null,legacyPath=path.join(lastFolder,'semantic_order.json');
  if(!saved&&fs.existsSync(legacyPath)){
   try{legacy=JSON.parse(fs.readFileSync(legacyPath,'utf8')).entries||null;}catch(e){log('Legacy order import: '+e.message,'WARN');}
@@ -204,7 +216,7 @@ function renderFamilyEditor(){
   var name=String(member.name||''),m=name.match(/(P\d{2}-SYM-\d{3})(?!\d)/i);
   return legacy['uuid:'+String(member.uuid||'').toLowerCase()]||(m?legacy['sym:'+m[1].toLowerCase()]:null);
  }
- familyPlan=currentFamilyCatalog.map(function(g,index){
+ if(!useCurrent||!familyPlan.length)familyPlan=currentFamilyCatalog.map(function(g,index){
   var uuids=g.members.map(function(m){return String(m.uuid||'');}).filter(Boolean);
   var matches=prior.filter(function(row){return (row.uuids||[]).some(function(u){return uuids.indexOf(String(u))>=0;});});
   var old=matches[0];
@@ -226,6 +238,12 @@ function renderFamilyEditor(){
  var area=$('familyEditorRows');area.textContent='';
  familyPlan.forEach(function(row,i){
   var surface=document.createElement('div');surface.style.cssText='display:flex;gap:6px;align-items:center;border-bottom:1px solid #4f5966;padding:6px 0';
+  var mergeBox=document.createElement('input');mergeBox.type='checkbox';
+  mergeBox.title=lang==='ru'?'Выбрать для объединения':'Select for merge';
+  mergeBox.style.cssText='width:auto';
+  var anchor=row.uuids[0];mergeBox.checked=!!selectedFamilyMerge[anchor];
+  mergeBox.addEventListener('change',function(){if(mergeBox.checked)selectedFamilyMerge[anchor]=true;else delete selectedFamilyMerge[anchor];});
+  surface.appendChild(mergeBox);
   var image=document.createElement('img');image.style.cssText='width:45px;height:45px;object-fit:contain;background:#2a3440;border-radius:4px';
   var src=byId[row.firstId];var visual=src&&familyThumbnail(src);if(visual)image.src=visual;else image.alt='—';surface.appendChild(image);
   var body=document.createElement('div');body.style.cssText='min-width:0;flex:1';
@@ -246,10 +264,81 @@ function renderFamilyEditor(){
   body.appendChild(controls);surface.appendChild(body);
   var move=document.createElement('div');move.style.cssText='display:flex;flex-direction:column;gap:2px';
   function arrow(symbol,offset){var btn=document.createElement('button');btn.type='button';btn.textContent=symbol;btn.style.cssText='min-height:23px;padding:2px 5px';btn.disabled=(i+offset<0||i+offset>=familyPlan.length);btn.addEventListener('click',function(){var other=familyPlan[i+offset];familyPlan[i+offset]=familyPlan[i];familyPlan[i]=other;familyPlan.forEach(function(r,j){r.priority=j;r.status='provisional';r.edited=true;});saveFamilyPlan(true);renderFamilyEditor();});move.appendChild(btn);}
-  arrow('↑',-1);arrow('↓',1);surface.appendChild(move);area.appendChild(surface);
+  arrow('↑',-1);arrow('↓',1);surface.appendChild(move);
+  if(row.members.length>1){
+    var exp=document.createElement('details');exp.style.cssText='max-width:120px';
+    var sum=document.createElement('summary');sum.textContent=lang==='ru'?'Разделить':'Split';exp.appendChild(sum);
+    var choices={};
+    row.members.forEach(function(m){
+      var label=document.createElement('label');label.style.cssText='display:block;font-size:10px';
+      var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.style.width='auto';
+      checkbox.addEventListener('change',function(){if(checkbox.checked)choices[m.uuid]=true;else delete choices[m.uuid];});
+      label.appendChild(checkbox);label.appendChild(document.createTextNode(' '+Number(m.equivalent_mm).toFixed(1)+' мм #'+m.id));
+      exp.appendChild(label);
+    });
+    var splitButton=document.createElement('button');splitButton.textContent=lang==='ru'?'Отделить':'Separate';splitButton.style.cssText='min-height:23px;padding:3px 5px';
+    splitButton.addEventListener('click',function(){splitFamilyMembers(row.uuids[0],Object.keys(choices));});
+    exp.appendChild(splitButton);move.appendChild(exp);
+  }
+  surface.appendChild(move);area.appendChild(surface);
  });
- saveFamilyPlan(!saved);
+ saveFamilyPlan(!saved&&!useCurrent);
 }
+
+function regroupAfterUserEdit(){
+ familyGroupingEdited=true;selectedFamilyMerge={};
+ familyPlan.forEach(function(row,i){row.priority=i;});
+ saveFamilyPlan(true);renderFamilyEditor(true);
+}
+function resetManualFamilies(){
+ if(!familyGroupingEdited)return status(lang==='ru'?'Ручные изменения групп отсутствуют':'No manual group overrides');
+ if(!window.confirm(lang==='ru'
+  ?'Вернуть автоматическое определение семейств? Изменение потребует повторного расчёта.'
+  :'Reset to automatically detected families? Recalculation will be required.'))return;
+ familyGroupingEdited=false;selectedFamilyMerge={};
+ familyPlan.forEach(function(row){row.status='provisional';});
+ saveFamilyPlan(true);
+ $('familyEditorStatus').textContent=lang==='ru'
+  ?'Ручная группировка сброшена. Рассчитайте заново для обновления каталога.'
+  :'Manual grouping reset. Calculate again to refresh families.';
+}
+function mergeSelectedFamilies(){
+ var chosen=familyPlan.filter(function(row){return !!selectedFamilyMerge[row.uuids[0]];});
+ if(chosen.length<2)return status(lang==='ru'?'Выберите минимум два семейства':'Select at least two families',true);
+ var ref=chosen[0];
+ for(var j=1;j<chosen.length;j++){
+  var next=chosen[j];
+  if(ref.section!==next.section||((ref.section==='roman'||ref.section==='gothic')&&ref.value!==next.value)){
+   return status(lang==='ru'?'Для объединения категории и числовые значения должны совпадать':'Merged families must share category and numerical value',true);
+  }
+ }
+ if(!window.confirm(lang==='ru'?'Объединить '+chosen.length+' семейства? Состав и размеры эмблем не изменятся. После объединения нужно проверить раскладку.':'Merge '+chosen.length+' families without changing artwork? A new calculation will be required.'))return;
+ ref.uuids=chosen.reduce(function(acc,row){return acc.concat(row.uuids);},[]);
+ ref.members=chosen.reduce(function(acc,row){return acc.concat(row.members);},[]);
+ ref.key='manual_'+ref.uuids[0];
+ ref.firstId=ref.members[0].id;ref.status='provisional';ref.edited=true;
+ var selected={};chosen.slice(1).forEach(function(row){selected[row.uuids[0]]=true;});
+ familyPlan=familyPlan.filter(function(row){return row===ref||!selected[row.uuids[0]];});
+ regroupAfterUserEdit();
+}
+function splitFamilyMembers(firstUuid, chosenUuids){
+ var row=familyPlan.find(function(x){return x.uuids[0]===firstUuid;});
+ if(!row||!chosenUuids.length||chosenUuids.length>=row.uuids.length)
+  return status(lang==='ru'?'Выберите часть элементов семейства, но не все':'Select some, but not all, family members',true);
+ var chosen={};chosenUuids.forEach(function(u){chosen[u]=true;});
+ var rest=row.members.filter(function(m){return !chosen[m.uuid];});
+ var detached=row.members.filter(function(m){return !!chosen[m.uuid];});
+ if(!rest.length||!detached.length)return status('Invalid split selection',true);
+ if(!window.confirm(lang==='ru'?'Отделить '+detached.length+' элементов в новое семейство?':'Split '+detached.length+' objects into a new family?'))return;
+ row.members=rest;row.uuids=rest.map(function(m){return m.uuid;});row.firstId=rest[0].id;row.status='provisional';row.edited=true;
+ var newRow={key:'split_'+detached[0].uuid,uuids:detached.map(function(m){return m.uuid;}),
+  members:detached,firstId:detached[0].id,label:row.label+' · 2',section:row.section,
+  value:row.value,priority:row.priority+1,status:'provisional',edited:true};
+ var idx=familyPlan.indexOf(row);
+ familyPlan.splice(idx+1,0,newRow);
+ regroupAfterUserEdit();
+}
+
 function confirmFamilyPlan(){
  if(!familyPlan.length)return;
  // Do not turn 13 generic P01 "other" families into fake verified semantics.
@@ -340,7 +429,7 @@ function connect(){
  $('calculate').addEventListener('click',beginCalculation);$('objectivePreset').addEventListener('change',setObjectiveProfile);['wArea','wSpacing','wTravel'].forEach(function(k){$(k).addEventListener('input',function(){$('objectivePreset').value='custom';});});$('cancel').addEventListener('click',cancelCalculation);$('operation').addEventListener('change',operationVisibility);$('families').addEventListener('change',familyMatchingVisibility);$('familyLayout').addEventListener('change',familyEditorModeChanged);
  $('lang').addEventListener('click',toggleLang);$('showPreview').addEventListener('click',function(){showPreview('plate');});$('showRoute').addEventListener('click',function(){showPreview('route');});
  $('showPareto').addEventListener('click',function(){paretoTrial=$('paretoSelect').value;if(paretoTrial)showPreview('pareto');});
- $('showBest').addEventListener('click',function(){showPreview('best');});$('confirmFamilyPlan').addEventListener('click',confirmFamilyPlan);$('showFamilyIds').addEventListener('change',renderFamilyAudit);$('savePreset').addEventListener('click',savePreset);$('loadPreset').addEventListener('click',loadPreset);$('refreshPresets').addEventListener('click',refreshPresets);
+ $('showBest').addEventListener('click',function(){showPreview('best');});$('confirmFamilyPlan').addEventListener('click',confirmFamilyPlan);$('mergeSelectedFamilies').addEventListener('click',mergeSelectedFamilies);$('resetManualFamilies').addEventListener('click',resetManualFamilies);$('showFamilyIds').addEventListener('change',renderFamilyAudit);$('savePreset').addEventListener('click',savePreset);$('loadPreset').addEventListener('click',loadPreset);$('refreshPresets').addEventListener('click',refreshPresets);
 }
 window.addEventListener('beforeunload',function(){if(activeJob){try{activeJob.process.kill();}catch(ignore){}}});
 setupNode();connect();setLanguage('ru');operationVisibility();findRecent();status(safeRoot()?t('ready'):t('noNode'),!safeRoot());
