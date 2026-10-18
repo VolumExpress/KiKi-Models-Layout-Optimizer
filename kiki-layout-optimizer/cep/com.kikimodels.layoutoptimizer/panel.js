@@ -92,6 +92,12 @@ function options(){if($('familyLayout').value!=='compact'&&$('mode').value==='or
   if(!lastFolder||!fs||!path)throw Error('Export the plate first');
   var data=loadFamilyPlan();
   if(data&&data.rows&&data.rows.length){
+   if(data.manual_grouping===true&&data.rows.some(function(row){
+       return (row.section==='roman'||row.section==='gothic')&&row.status!=='confirmed';})){
+     throw Error(lang==='ru'
+       ?'После объединения/разделения числового семейства проверьте и подтвердите его номинал, затем пересчитайте.'
+       :'After changing numeric family membership, verify and confirm its value before calculation.');
+   }
    var entries={};
    // Default automatically detected groups carry no meaningful order. They
    // must not force strict shelving and slash a manufacturable 4.5 mm gap.
@@ -281,7 +287,7 @@ function renderFamilyEditor(useCurrent){
 
 function regroupAfterUserEdit(){
  familyGroupingEdited=true;selectedFamilyMerge={};
- familyPlan.forEach(function(row,i){row.priority=i;row.edited=true;row.status='provisional';});
+ familyPlan.forEach(function(row,i){row.priority=i;});
  saveFamilyPlan(true);renderFamilyEditor(true);
 }
 function resetManualFamilies(){
@@ -310,7 +316,7 @@ function mergeSelectedFamilies(){
  ref.uuids=chosen.reduce(function(acc,row){return acc.concat(row.uuids);},[]);
  ref.members=chosen.reduce(function(acc,row){return acc.concat(row.members);},[]);
  ref.key='manual_'+ref.uuids[0];
- ref.firstId=ref.members[0].id;
+ ref.firstId=ref.members[0].id;ref.status='provisional';ref.edited=true;
  var selected={};chosen.slice(1).forEach(function(row){selected[row.uuids[0]]=true;});
  familyPlan=familyPlan.filter(function(row){return row===ref||!selected[row.uuids[0]];});
  regroupAfterUserEdit();
@@ -324,7 +330,7 @@ function splitFamilyMembers(firstUuid, chosenUuids){
  var detached=row.members.filter(function(m){return !!chosen[m.uuid];});
  if(!rest.length||!detached.length)return status('Invalid split selection',true);
  if(!window.confirm(lang==='ru'?'Отделить '+detached.length+' элементов в новое семейство?':'Split '+detached.length+' objects into a new family?'))return;
- row.members=rest;row.uuids=rest.map(function(m){return m.uuid;});row.firstId=rest[0].id;
+ row.members=rest;row.uuids=rest.map(function(m){return m.uuid;});row.firstId=rest[0].id;row.status='provisional';row.edited=true;
  var newRow={key:'split_'+detached[0].uuid,uuids:detached.map(function(m){return m.uuid;}),
   members:detached,firstId:detached[0].id,label:row.label+' · 2',section:row.section,
   value:row.value,priority:row.priority+1,status:'provisional',edited:true};
