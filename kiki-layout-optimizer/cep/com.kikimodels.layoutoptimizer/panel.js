@@ -284,6 +284,18 @@ function regroupAfterUserEdit(){
  familyPlan.forEach(function(row,i){row.priority=i;row.edited=true;row.status='provisional';});
  saveFamilyPlan(true);renderFamilyEditor(true);
 }
+function resetManualFamilies(){
+ if(!familyGroupingEdited)return status(lang==='ru'?'Ручные изменения групп отсутствуют':'No manual group overrides');
+ if(!window.confirm(lang==='ru'
+  ?'Вернуть автоматическое определение семейств? Изменение потребует повторного расчёта.'
+  :'Reset to automatically detected families? Recalculation will be required.'))return;
+ familyGroupingEdited=false;selectedFamilyMerge={};
+ familyPlan.forEach(function(row){row.status='provisional';});
+ saveFamilyPlan(true);
+ $('familyEditorStatus').textContent=lang==='ru'
+  ?'Ручная группировка сброшена. Рассчитайте заново для обновления каталога.'
+  :'Manual grouping reset. Calculate again to refresh families.';
+}
 function mergeSelectedFamilies(){
  var chosen=familyPlan.filter(function(row){return !!selectedFamilyMerge[row.uuids[0]];});
  if(chosen.length<2)return status(lang==='ru'?'Выберите минимум два семейства':'Select at least two families',true);
@@ -411,7 +423,7 @@ function connect(){
  $('calculate').addEventListener('click',beginCalculation);$('objectivePreset').addEventListener('change',setObjectiveProfile);['wArea','wSpacing','wTravel'].forEach(function(k){$(k).addEventListener('input',function(){$('objectivePreset').value='custom';});});$('cancel').addEventListener('click',cancelCalculation);$('operation').addEventListener('change',operationVisibility);$('families').addEventListener('change',familyMatchingVisibility);$('familyLayout').addEventListener('change',familyEditorModeChanged);
  $('lang').addEventListener('click',toggleLang);$('showPreview').addEventListener('click',function(){showPreview('plate');});$('showRoute').addEventListener('click',function(){showPreview('route');});
  $('showPareto').addEventListener('click',function(){paretoTrial=$('paretoSelect').value;if(paretoTrial)showPreview('pareto');});
- $('showBest').addEventListener('click',function(){showPreview('best');});$('confirmFamilyPlan').addEventListener('click',confirmFamilyPlan);$('mergeSelectedFamilies').addEventListener('click',mergeSelectedFamilies);$('showFamilyIds').addEventListener('change',renderFamilyAudit);$('savePreset').addEventListener('click',savePreset);$('loadPreset').addEventListener('click',loadPreset);$('refreshPresets').addEventListener('click',refreshPresets);
+ $('showBest').addEventListener('click',function(){showPreview('best');});$('confirmFamilyPlan').addEventListener('click',confirmFamilyPlan);$('mergeSelectedFamilies').addEventListener('click',mergeSelectedFamilies);$('resetManualFamilies').addEventListener('click',resetManualFamilies);$('showFamilyIds').addEventListener('change',renderFamilyAudit);$('savePreset').addEventListener('click',savePreset);$('loadPreset').addEventListener('click',loadPreset);$('refreshPresets').addEventListener('click',refreshPresets);
 }
 window.addEventListener('beforeunload',function(){if(activeJob){try{activeJob.process.kill();}catch(ignore){}}});
 setupNode();connect();setLanguage('ru');operationVisibility();findRecent();status(safeRoot()?t('ready'):t('noNode'),!safeRoot());
