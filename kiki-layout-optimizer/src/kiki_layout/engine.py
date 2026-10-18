@@ -127,7 +127,7 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
            rotations=(0,), families="off", family_threshold=0.97, outline_aware=False,
            width=None, height=None, refine=True, progress=None,
            operation="engrave", kerf_mm=0.0, constraints=None,
-           order_strategy="baseline", random_seed=42, contour_anchors=False, candidate_policy="default", advanced_geometry=False, advanced_search=False, search_weights=None, family_layout="compact", family_width_fraction=0.55, family_packing_strategy="shelf", semantic_map=None):
+           order_strategy="baseline", random_seed=42, contour_anchors=False, candidate_policy="default", advanced_geometry=False, advanced_search=False, search_weights=None, family_layout="compact", family_width_fraction=0.55, family_packing_strategy="shelf", semantic_map=None, family_overrides=None):
     if semantic_map is not None and (family_layout != "family_first" or mode == "ordered"
             or flow != "rows" or tuple(rotations) != (0,)):
         raise ValueError("Semantic numbering requires Uniform/Dense + Family First + Rows + 0-degree rotations")
@@ -185,6 +185,10 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
             raise ValueError(f'Object {oid}: no rotation allowed by both global and individual settings')
         allowed[oid]=angles
     labels,warnings=detect_families(objects,shapes,families,family_threshold,outline_aware=outline_aware)
+    if family_overrides is not None:
+        from .family_override import apply_family_overrides
+        labels=apply_family_overrides(data, family_overrides)
+        warnings.append("Manual UUID-based family merge/split overrides applied; review all resulting families.")
     degenerate_audit=duplicate_point_ring_audit(data)
     if degenerate_audit:
         ids=", ".join(sorted(set(entry["object_id"] for entry in degenerate_audit)))
@@ -202,9 +206,13 @@ def _layout_once(data, *, mode="uniform", gap=0.8, margin=2.0,
         else:
             family_members.setdefault(label,[]).append(oid)
     for label,ids_in_family in family_members.items():
+        if family_overrides is not None and any(oid in locked_ids for oid in ids_in_family) and len(ids_in_family)>1:
+            raise ValueError("Locked Illustrator objects cannot be manually merged into a movable family")
         joint=set(allowed[ids_in_family[0]])
         for oid in ids_in_family[1:]: joint.intersection_update(allowed[oid])
         if not joint:
+            if family_overrides is not None:
+                raise ValueError("Manually merged family has incompatible rotation constraints")
             for oid in ids_in_family: labels[oid]='rotation:'+oid
             warnings.append(f'Family {label}: split because members have incompatible rotation limits')
     family_entries={}
