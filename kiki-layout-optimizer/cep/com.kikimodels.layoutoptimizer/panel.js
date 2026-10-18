@@ -232,6 +232,12 @@ function renderFamilyEditor(useCurrent){
  var area=$('familyEditorRows');area.textContent='';
  familyPlan.forEach(function(row,i){
   var surface=document.createElement('div');surface.style.cssText='display:flex;gap:6px;align-items:center;border-bottom:1px solid #4f5966;padding:6px 0';
+  var mergeBox=document.createElement('input');mergeBox.type='checkbox';
+  mergeBox.title=lang==='ru'?'Выбрать для объединения':'Select for merge';
+  mergeBox.style.cssText='width:auto';
+  var anchor=row.uuids[0];mergeBox.checked=!!selectedFamilyMerge[anchor];
+  mergeBox.addEventListener('change',function(){if(mergeBox.checked)selectedFamilyMerge[anchor]=true;else delete selectedFamilyMerge[anchor];});
+  surface.appendChild(mergeBox);
   var image=document.createElement('img');image.style.cssText='width:45px;height:45px;object-fit:contain;background:#2a3440;border-radius:4px';
   var src=byId[row.firstId];var visual=src&&familyThumbnail(src);if(visual)image.src=visual;else image.alt='—';surface.appendChild(image);
   var body=document.createElement('div');body.style.cssText='min-width:0;flex:1';
@@ -252,10 +258,69 @@ function renderFamilyEditor(useCurrent){
   body.appendChild(controls);surface.appendChild(body);
   var move=document.createElement('div');move.style.cssText='display:flex;flex-direction:column;gap:2px';
   function arrow(symbol,offset){var btn=document.createElement('button');btn.type='button';btn.textContent=symbol;btn.style.cssText='min-height:23px;padding:2px 5px';btn.disabled=(i+offset<0||i+offset>=familyPlan.length);btn.addEventListener('click',function(){var other=familyPlan[i+offset];familyPlan[i+offset]=familyPlan[i];familyPlan[i]=other;familyPlan.forEach(function(r,j){r.priority=j;r.status='provisional';r.edited=true;});saveFamilyPlan(true);renderFamilyEditor();});move.appendChild(btn);}
-  arrow('↑',-1);arrow('↓',1);surface.appendChild(move);area.appendChild(surface);
+  arrow('↑',-1);arrow('↓',1);surface.appendChild(move);
+  if(row.members.length>1){
+    var exp=document.createElement('details');exp.style.cssText='max-width:120px';
+    var sum=document.createElement('summary');sum.textContent=lang==='ru'?'Разделить':'Split';exp.appendChild(sum);
+    var choices={};
+    row.members.forEach(function(m){
+      var label=document.createElement('label');label.style.cssText='display:block;font-size:10px';
+      var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.style.width='auto';
+      checkbox.addEventListener('change',function(){if(checkbox.checked)choices[m.uuid]=true;else delete choices[m.uuid];});
+      label.appendChild(checkbox);label.appendChild(document.createTextNode(' '+Number(m.equivalent_mm).toFixed(1)+' мм #'+m.id));
+      exp.appendChild(label);
+    });
+    var splitButton=document.createElement('button');splitButton.textContent=lang==='ru'?'Отделить':'Separate';splitButton.style.cssText='min-height:23px;padding:3px 5px';
+    splitButton.addEventListener('click',function(){splitFamilyMembers(row.uuids[0],Object.keys(choices));});
+    exp.appendChild(splitButton);move.appendChild(exp);
+  }
+  surface.appendChild(move);area.appendChild(surface);
  });
  saveFamilyPlan(!saved&&!useCurrent);
 }
+
+function regroupAfterUserEdit(){
+ familyGroupingEdited=true;selectedFamilyMerge={};
+ familyPlan.forEach(function(row,i){row.priority=i;row.edited=true;row.status='provisional';});
+ saveFamilyPlan(true);renderFamilyEditor(true);
+}
+function mergeSelectedFamilies(){
+ var chosen=familyPlan.filter(function(row){return !!selectedFamilyMerge[row.uuids[0]];});
+ if(chosen.length<2)return status(lang==='ru'?'Выберите минимум два семейства':'Select at least two families',true);
+ var ref=chosen[0];
+ for(var j=1;j<chosen.length;j++){
+  var next=chosen[j];
+  if(ref.section!==next.section||((ref.section==='roman'||ref.section==='gothic')&&ref.value!==next.value)){
+   return status(lang==='ru'?'Для объединения категории и числовые значения должны совпадать':'Merged families must share category and numerical value',true);
+  }
+ }
+ if(!window.confirm(lang==='ru'?'Объединить '+chosen.length+' семейства? Состав и размеры эмблем не изменятся. После объединения нужно проверить раскладку.':'Merge '+chosen.length+' families without changing artwork? A new calculation will be required.'))return;
+ ref.uuids=chosen.reduce(function(acc,row){return acc.concat(row.uuids);},[]);
+ ref.members=chosen.reduce(function(acc,row){return acc.concat(row.members);},[]);
+ ref.key='manual_'+ref.uuids[0];
+ ref.firstId=ref.members[0].id;
+ var selected={};chosen.slice(1).forEach(function(row){selected[row.uuids[0]]=true;});
+ familyPlan=familyPlan.filter(function(row){return row===ref||!selected[row.uuids[0]];});
+ regroupAfterUserEdit();
+}
+function splitFamilyMembers(firstUuid, chosenUuids){
+ var row=familyPlan.find(function(x){return x.uuids[0]===firstUuid;});
+ if(!row||!chosenUuids.length||chosenUuids.length>=row.uuids.length)
+  return status(lang==='ru'?'Выберите часть элементов семейства, но не все':'Select some, but not all, family members',true);
+ var chosen={};chosenUuids.forEach(function(u){chosen[u]=true;});
+ var rest=row.members.filter(function(m){return !chosen[m.uuid];});
+ var detached=row.members.filter(function(m){return !!chosen[m.uuid];});
+ if(!rest.length||!detached.length)return status('Invalid split selection',true);
+ if(!window.confirm(lang==='ru'?'Отделить '+detached.length+' элементов в новое семейство?':'Split '+detached.length+' objects into a new family?'))return;
+ row.members=rest;row.uuids=rest.map(function(m){return m.uuid;});row.firstId=rest[0].id;
+ var newRow={key:'split_'+detached[0].uuid,uuids:detached.map(function(m){return m.uuid;}),
+  members:detached,firstId:detached[0].id,label:row.label+' · 2',section:row.section,
+  value:row.value,priority:row.priority+1,status:'provisional',edited:true};
+ var idx=familyPlan.indexOf(row);
+ familyPlan.splice(idx+1,0,newRow);
+ regroupAfterUserEdit();
+}
+
 function confirmFamilyPlan(){
  if(!familyPlan.length)return;
  // Do not turn 13 generic P01 "other" families into fake verified semantics.
