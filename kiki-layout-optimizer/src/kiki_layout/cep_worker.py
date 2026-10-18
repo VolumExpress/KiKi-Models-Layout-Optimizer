@@ -14,7 +14,7 @@ from .gui_jobs import calculate
 
 ALLOWED = {"mode", "gap", "margin", "margin_left", "margin_top", "margin_right",
            "margin_bottom", "rotations", "families", "flow", "travel_order",
-           "operation", "kerf_mm", "lang", "trials", "time_budget_sec", "seed", "contour_anchors", "advanced_geometry", "advanced_search", "objective_weights", "guided_objectives", "cut_common_line_audit", "family_layout", "outline_aware", "adaptive_gap", "semantic_map"}
+           "operation", "kerf_mm", "lang", "trials", "time_budget_sec", "seed", "contour_anchors", "advanced_geometry", "advanced_search", "objective_weights", "guided_objectives", "cut_common_line_audit", "family_layout", "outline_aware", "adaptive_gap", "semantic_map", "family_overrides"}
 STAGES = {"gap_search": (3, 97), "searching": (3, 95), "compacting": (92, 97), "preparing": (0, 3), "placing": (3, 80), "refining": (80, 92),
           "validating": (97, 99), "complete": (99, 99)}
 
@@ -46,6 +46,10 @@ def parse_request(path: Path):
             raise ValueError("Semantic order requires family_first")
         source = json.loads(input_path.read_text(encoding="utf-8-sig"))
         validate_manifest(options["semantic_map"], source.get("document_name"))
+    if "family_overrides" in options:
+        from .family_override import apply_family_overrides
+        source = json.loads(input_path.read_text(encoding="utf-8-sig"))
+        apply_family_overrides(source, options["family_overrides"])
     if "adaptive_gap" in options and type(options["adaptive_gap"]) is not bool:
         raise ValueError("adaptive_gap must be boolean")
     if "outline_aware" in options and type(options["outline_aware"]) is not bool:
