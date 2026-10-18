@@ -5,7 +5,7 @@
 'use strict';
 var root=window.KIKI_PROJECT_ROOT||'';
 var lang='ru', busy=false, child=null, currentInput='',lastFolder='',currentPreview='plate';
-var fs=null,path=null,spawn=null,BufferCtor=null,paretoTrial=null,currentGapAdjustment=null,currentSemanticAudit=null,currentFamilyCatalog=[],familyPlan=[];
+var fs=null,path=null,spawn=null,BufferCtor=null,paretoTrial=null,currentGapAdjustment=null,currentSemanticAudit=null,currentFamilyCatalog=[],familyPlan=[],familyGroupingEdited=false,selectedFamilyMerge={};
 var $=function(id){return document.getElementById(id);};
 var translations={
 ru:{outlineMatchContext:'Дополнительное сопоставление работает только при группировке «По силуэту».',workflowHelp:'Быстрый старт',workflowDescription:'Выделите эмблемы на холсте Illustrator → экспортируйте → выберите настройки → рассчитайте → проверьте результат → примените. После правки контуров экспортируйте повторно. Работайте с копией .ai.',operationHelp:'Как выбрать технологию?',operationDescription:'Гравировка — расположение изображений с заданным зазором. Резка — разнос отдельных деталей с учётом ширины пропила; это не готовая программа станка.',rotationHelp:'Какие повороты безопасны?',rotationDescription:'0° сохраняет ориентацию. При 90° или 180° цифры, стрелки и направленные эмблемы могут изменить смысл. Для отдельных объектов задавайте свои ограничения ниже.',clearanceHelp:'Что означают зазор и поля?',clearanceDescription:'Зазор — минимальная дистанция между отдельными эмблемами; поля — отступ до краёв пластины. Для резки дополнительно учитывается ширина пропила. Единицы — мм.',rulesHelp:'Как закреплять объекты?',rulesDescription:'Экспортируйте всю пластину, затем выделите нужные эмблемы в Illustrator, задайте фиксацию или повороты и сохраните ограничения. После изменения самих контуров выполните новый экспорт.',presetHelp:'Что сохраняет пресет?',presetDescription:'Пресет содержит режим, интервалы, поля, углы и параметры поиска, но не изображения и не правила фиксации отдельных объектов.',familyReviewNote:'Здесь показано, какие объекты распознаны как одно семейство. Упорядоченная раскладка может выглядеть иначе при совершенно том же составе семейств.',showFamilyIds:'Показать технические ID и исходные имена',compactExample:'Компактно',compactExampleNote:'Приоритет плотности',orderedExample:'Сериями',orderedExampleNote:'Приоритет порядка размеров',guidedObjectives:'Эксперимент: веса управляют поиском позиций (может ухудшить результат)',paretoTitle:'Другие допустимые варианты',paretoNote:'Другие проверенные варианты отличаются плотностью и равномерностью. Только просмотр: применить можно лишь итоговую раскладку, выбранную расчётом.',paretoShow:'Показать альтернативу',objectivePreset:'Готовый профиль',multiTitle:'Приоритеты раскладки',multiEnabled:'Выбирать лучший по трём критериям',areaWeight:'Плотность (0–10)',spacingWeight:'Равномерность (0–10)',travelWeight:'Переходы (0–10)',multiNote:'По умолчанию веса выбирают лучший из рассчитанных вариантов. Влияние весов на сам поиск включается отдельно и остаётся экспериментальным. Переходы — оценка, не время станка.',commonLineLabel:'Аудит совпадающих линий в исходном макете',commonLineNote:'Только диагностика: не объединяет контуры и не создаёт маршрут резки. Требуется проверка в CAM.',subtitle:'Оптимизация раскладки',export:'Экспорт выделения',calculate:'Рассчитать',apply:'Применить',
@@ -104,6 +104,11 @@ function options(){if($('familyLayout').value!=='compact'&&$('mode').value==='or
     });
    });
    if(Object.keys(entries).length)o.semantic_map={schema:1,document_name:data.document_name,entries:entries};
+   if(data.manual_grouping===true){
+    // Complete group partition; identity is UUID, NEVER a guessed silhouette.
+    var allGroups=data.rows.map(function(row,i){return {id:'manual_'+i,uuids:row.uuids};});
+    o.family_overrides={schema:1,document_name:data.document_name,groups:allGroups};
+   }
   }
  }
  return o;}
@@ -114,7 +119,7 @@ function familyMatchingVisibility(){var disabled=$('families').value!=='auto';$(
 function operationVisibility(){$('kerfWrap').style.display=$('operation').value==='cut'?'block':'none';$('cutAuditWrap').style.display=$('operation').value==='cut'?'block':'none';}
 function percent(stage,done,total){var ranges={searching:[3,95],preparing:[0,3],placing:[3,80],refining:[80,92],compacting:[92,97],validating:[97,99],complete:[99,99]};var a=ranges[stage]||[0,0];return Math.max(0,Math.min(99,Math.floor(a[0]+(a[1]-a[0])*done/Math.max(total,1))));}
 function bar(value,stage,done,total){$('progressFill').style.width=value+'%';$('stage').textContent=(t('stages')[stage]||stage)+' ('+done+'/'+total+') — '+value+'%';}
-function clearPreview(){paretoTrial=null;currentSemanticAudit=null;currentFamilyCatalog=[];familyPlan=[];if($('familyEditorSection'))$('familyEditorSection').className='hidden';if($('semanticNotice')){$('semanticNotice').className='hidden';$('semanticNotice').textContent='';}currentGapAdjustment=null;if($('gapNotice')){$('gapNotice').className='hidden';$('gapNotice').textContent='';}if($('paretoSelect')){$('paretoSelect').innerHTML='<option value="">—</option>';$('paretoSummary').textContent='';}calcReady=false;$('apply').disabled=true;$('preview').removeAttribute('src');$('preview').className='hidden';$('previewEmpty').className='';$('report').textContent='';$('familyReviewContent').textContent='';currentFamilyAudit=[];$('progressFill').style.width='0%';}
+function clearPreview(){paretoTrial=null;currentSemanticAudit=null;currentFamilyCatalog=[];familyPlan=[];familyGroupingEdited=false;selectedFamilyMerge={};if($('familyEditorSection'))$('familyEditorSection').className='hidden';if($('semanticNotice')){$('semanticNotice').className='hidden';$('semanticNotice').textContent='';}currentGapAdjustment=null;if($('gapNotice')){$('gapNotice').className='hidden';$('gapNotice').textContent='';}if($('paretoSelect')){$('paretoSelect').innerHTML='<option value="">—</option>';$('paretoSummary').textContent='';}calcReady=false;$('apply').disabled=true;$('preview').removeAttribute('src');$('preview').className='hidden';$('previewEmpty').className='';$('report').textContent='';$('familyReviewContent').textContent='';currentFamilyAudit=[];$('progressFill').style.width='0%';}
 function showPreview(kind){currentPreview=kind;if(!lastFolder||!safeRoot()){status(t('noInput'),true);return;}var f=path.join(lastFolder,kind==='route'?'route_test.svg':kind==='best'?'best_so_far.svg':kind==='pareto'?path.join('alternatives','trial_'+String(paretoTrial).padStart(2,'0')+'.svg'):'preview_test.svg');try{
  if(!fs.existsSync(f))throw Error('Preview not found: '+f);if(fs.statSync(f).size>8*1024*1024)throw Error('SVG preview too large');
  var svg=fs.readFileSync(f);$('preview').src='data:image/svg+xml;base64,'+svg.toString('base64');$('preview').className='';$('previewEmpty').className='hidden';
@@ -158,7 +163,7 @@ function loadFamilyPlan(){
 function saveFamilyPlan(dirty){
  if(!fs||!lastFolder||!currentInput||!familyPlan.length)return;
  var doc=JSON.parse(fs.readFileSync(currentInput,'utf8')).document_name;
- var data={schema:1,document_name:doc,rows:familyPlan.map(function(row){
+ var data={schema:1,document_name:doc,manual_grouping:!!familyGroupingEdited,rows:familyPlan.map(function(row){
   return {uuids:row.uuids.slice(),edited:!!row.edited,section:row.section,value:row.value,
           priority:row.priority,status:row.status,label:row.label};
  })};
@@ -194,7 +199,7 @@ function renderFamilyEditor(){
  if($('familyLayout').value!=='semantic'){$('familyEditorSection').className='hidden';return;}
  var input=JSON.parse(fs.readFileSync(currentInput,'utf8')),byId={};
  (input.objects||[]).forEach(function(x){byId[String(x.id)]=x;});
- var saved=loadFamilyPlan(),prior=saved?saved.rows:[];
+ var saved=loadFamilyPlan(),prior=saved?saved.rows:[];familyGroupingEdited=!!(saved&&saved.manual_grouping);
  var legacy=null,legacyPath=path.join(lastFolder,'semantic_order.json');
  if(!saved&&fs.existsSync(legacyPath)){
   try{legacy=JSON.parse(fs.readFileSync(legacyPath,'utf8')).entries||null;}catch(e){log('Legacy order import: '+e.message,'WARN');}
