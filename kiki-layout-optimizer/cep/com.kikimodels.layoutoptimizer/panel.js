@@ -194,12 +194,13 @@ function familyThumbnail(item){
  polygons.forEach(function(g){var d='';g.p.forEach(function(q,i){d+=(i?'L':'M')+Number(q[0]).toFixed(4)+' '+Number(q[1]).toFixed(4)+' ';});if(g.close)d+='Z';svg+='<path d="'+d+'" fill="'+(g.close?'#89a7c0':'none')+'" fill-rule="evenodd" stroke="#e0e9f4" stroke-width="'+Math.max(wx,wy)/110+'"/>';});
  svg+='</svg>';return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
 }
-function renderFamilyEditor(){
- if(!$('familyEditorSection')||!currentInput||!currentFamilyCatalog.length)return;
+function renderFamilyEditor(useCurrent){
+ if(!$('familyEditorSection')||!currentInput||(!currentFamilyCatalog.length&&!familyPlan.length))return;
  if($('familyLayout').value!=='semantic'){$('familyEditorSection').className='hidden';return;}
  var input=JSON.parse(fs.readFileSync(currentInput,'utf8')),byId={};
  (input.objects||[]).forEach(function(x){byId[String(x.id)]=x;});
- var saved=loadFamilyPlan(),prior=saved?saved.rows:[];familyGroupingEdited=!!(saved&&saved.manual_grouping);
+ var saved=useCurrent?null:loadFamilyPlan(),prior=saved?saved.rows:[];
+ if(!useCurrent)familyGroupingEdited=!!(saved&&saved.manual_grouping);
  var legacy=null,legacyPath=path.join(lastFolder,'semantic_order.json');
  if(!saved&&fs.existsSync(legacyPath)){
   try{legacy=JSON.parse(fs.readFileSync(legacyPath,'utf8')).entries||null;}catch(e){log('Legacy order import: '+e.message,'WARN');}
@@ -209,7 +210,7 @@ function renderFamilyEditor(){
   var name=String(member.name||''),m=name.match(/(P\d{2}-SYM-\d{3})(?!\d)/i);
   return legacy['uuid:'+String(member.uuid||'').toLowerCase()]||(m?legacy['sym:'+m[1].toLowerCase()]:null);
  }
- familyPlan=currentFamilyCatalog.map(function(g,index){
+ if(!useCurrent||!familyPlan.length)familyPlan=currentFamilyCatalog.map(function(g,index){
   var uuids=g.members.map(function(m){return String(m.uuid||'');}).filter(Boolean);
   var matches=prior.filter(function(row){return (row.uuids||[]).some(function(u){return uuids.indexOf(String(u))>=0;});});
   var old=matches[0];
@@ -253,7 +254,7 @@ function renderFamilyEditor(){
   function arrow(symbol,offset){var btn=document.createElement('button');btn.type='button';btn.textContent=symbol;btn.style.cssText='min-height:23px;padding:2px 5px';btn.disabled=(i+offset<0||i+offset>=familyPlan.length);btn.addEventListener('click',function(){var other=familyPlan[i+offset];familyPlan[i+offset]=familyPlan[i];familyPlan[i]=other;familyPlan.forEach(function(r,j){r.priority=j;r.status='provisional';r.edited=true;});saveFamilyPlan(true);renderFamilyEditor();});move.appendChild(btn);}
   arrow('↑',-1);arrow('↓',1);surface.appendChild(move);area.appendChild(surface);
  });
- saveFamilyPlan(!saved);
+ saveFamilyPlan(!saved&&!useCurrent);
 }
 function confirmFamilyPlan(){
  if(!familyPlan.length)return;
@@ -345,7 +346,7 @@ function connect(){
  $('calculate').addEventListener('click',beginCalculation);$('objectivePreset').addEventListener('change',setObjectiveProfile);['wArea','wSpacing','wTravel'].forEach(function(k){$(k).addEventListener('input',function(){$('objectivePreset').value='custom';});});$('cancel').addEventListener('click',cancelCalculation);$('operation').addEventListener('change',operationVisibility);$('families').addEventListener('change',familyMatchingVisibility);$('familyLayout').addEventListener('change',familyEditorModeChanged);
  $('lang').addEventListener('click',toggleLang);$('showPreview').addEventListener('click',function(){showPreview('plate');});$('showRoute').addEventListener('click',function(){showPreview('route');});
  $('showPareto').addEventListener('click',function(){paretoTrial=$('paretoSelect').value;if(paretoTrial)showPreview('pareto');});
- $('showBest').addEventListener('click',function(){showPreview('best');});$('confirmFamilyPlan').addEventListener('click',confirmFamilyPlan);$('showFamilyIds').addEventListener('change',renderFamilyAudit);$('savePreset').addEventListener('click',savePreset);$('loadPreset').addEventListener('click',loadPreset);$('refreshPresets').addEventListener('click',refreshPresets);
+ $('showBest').addEventListener('click',function(){showPreview('best');});$('confirmFamilyPlan').addEventListener('click',confirmFamilyPlan);$('mergeSelectedFamilies').addEventListener('click',mergeSelectedFamilies);$('showFamilyIds').addEventListener('change',renderFamilyAudit);$('savePreset').addEventListener('click',savePreset);$('loadPreset').addEventListener('click',loadPreset);$('refreshPresets').addEventListener('click',refreshPresets);
 }
 window.addEventListener('beforeunload',function(){if(activeJob){try{activeJob.process.kill();}catch(ignore){}}});
 setupNode();connect();setLanguage('ru');operationVisibility();findRecent();status(safeRoot()?t('ready'):t('noNode'),!safeRoot());
