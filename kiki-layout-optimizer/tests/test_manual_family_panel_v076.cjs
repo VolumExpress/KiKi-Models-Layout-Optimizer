@@ -1,0 +1,21 @@
+// Safe, native CEP family merge/split actions must remain syntax-valid.
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const base=path.resolve(__dirname,'../cep/com.kikimodels.layoutoptimizer');
+const js=fs.readFileSync(path.join(base,'panel.js'),'utf8');
+const html=fs.readFileSync(path.join(base,'index.html'),'utf8');
+assert.doesNotThrow(()=>new vm.Script(js));
+assert.match(html,/id="mergeSelectedFamilies"/);
+assert.match(js,/function mergeSelectedFamilies\(/);
+assert.match(js,/function splitFamilyMembers\(/);
+assert.match(js,/function regroupAfterUserEdit\(/);
+assert.match(js,/familyGroupingEdited=true/);
+assert.match(js,/o\.family_overrides=/);
+assert.match(js,/data\.manual_grouping===true/);
+assert.match(js,/saveFamilyPlan\(true\);renderFamilyEditor\(true\)/);
+assert.match(js,/selectedFamilyMerge\[anchor\]/);
+assert.match(js,/if\(!rest\.length\|\|!detached\.length\)/);
+assert.match(js,/calcReady=false;\$\('apply'\)\.disabled=true/);
+console.log('PASS native visual merge/split editor wiring');
