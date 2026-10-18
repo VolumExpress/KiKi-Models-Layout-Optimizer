@@ -25,12 +25,16 @@ def apply_family_overrides(data, override):
             raise ValueError("Manual family groups require unique Illustrator UUIDs")
         uuid_to_id[uid]=str(ob["id"])
     found={}
+    used_group_ids=set()
     for index,group in enumerate(groups):
         if not isinstance(group,dict):
             raise ValueError("Manual group must be an object")
         name=group.get("id",str(index))
         if not isinstance(name,str) or not re.fullmatch(r"[\w.-]{1,128}",name):
             raise ValueError("Unsafe manual family group identifier")
+        if name in used_group_ids:
+            raise ValueError("Duplicate manual family group identifier")
+        used_group_ids.add(name)
         members=group.get("uuids")
         if not isinstance(members,list) or not members or len(members)>1000:
             raise ValueError("Manual group must contain valid UUIDs")
